@@ -19,22 +19,15 @@
  */
 package com.openhtmltopdf.extend;
 
-import java.awt.Paint;
-import java.awt.Rectangle;
-import java.awt.Shape;
-import java.awt.Stroke;
-import java.awt.RenderingHints.Key;
 import com.openhtmltopdf.css.parser.FSColor;
 import com.openhtmltopdf.css.style.CalculatedStyle;
 import com.openhtmltopdf.css.style.derived.BorderPropertySet;
-import com.openhtmltopdf.render.BlockBox;
-import com.openhtmltopdf.render.Box;
-import com.openhtmltopdf.render.FSFont;
-import com.openhtmltopdf.render.InlineLayoutBox;
-import com.openhtmltopdf.render.InlineText;
-import com.openhtmltopdf.render.LineBox;
-import com.openhtmltopdf.render.RenderingContext;
-import com.openhtmltopdf.render.TextDecoration;
+import com.openhtmltopdf.render.*;
+
+import java.awt.*;
+import java.awt.RenderingHints.Key;
+import java.awt.geom.AffineTransform;
+import java.util.List;
 
 public interface OutputDevice {
 
@@ -48,6 +41,19 @@ public interface OutputDevice {
 	public void setRawClip(Shape s);
 	public void rawClip(Shape s);
 	public Shape getRawClip();
+
+	// Required for CSS transforms.
+
+	/**
+	 * Apply the given transform on top of the current one in the PDF graphics stream.
+	 * This is a cumulative operation. You should popTransform after the box and children are painted.
+	 * @return 
+	 */
+	public List<AffineTransform> pushTransforms(List<AffineTransform> transforms);
+	public void popTransforms(List<AffineTransform> inverse);
+	
+	float getAbsoluteTransformOriginX();
+	float getAbsoluteTransformOriginY();
 	
 	// And the rest.
     public void drawText(RenderingContext c, InlineText inlineText);
@@ -104,4 +110,5 @@ public interface OutputDevice {
     public boolean isSupportsSelection();
     
     public boolean isSupportsCMYKColors();
+
 }

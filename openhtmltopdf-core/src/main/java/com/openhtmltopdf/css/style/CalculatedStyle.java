@@ -43,8 +43,11 @@ import com.openhtmltopdf.css.style.derived.ListValue;
 import com.openhtmltopdf.css.style.derived.NumberValue;
 import com.openhtmltopdf.css.style.derived.RectPropertySet;
 import com.openhtmltopdf.css.value.FontSpecification;
+import com.openhtmltopdf.newtable.TableBox;
+import com.openhtmltopdf.render.Box;
 import com.openhtmltopdf.render.FSFont;
 import com.openhtmltopdf.render.FSFontMetrics;
+import com.openhtmltopdf.render.RenderingContext;
 import com.openhtmltopdf.util.XRLog;
 import com.openhtmltopdf.util.XRRuntimeException;
 
@@ -956,6 +959,10 @@ public class CalculatedStyle {
     }
 
     public boolean requiresLayer() {
+    	if (!isIdent(CSSName.TRANSFORM, IdentValue.NONE)) {
+    		return true;
+    	}
+    	
         FSDerivedValue value = valueByName(CSSName.POSITION);
 
         if (value instanceof FunctionValue) {  // running(header)
@@ -1026,8 +1033,42 @@ public class CalculatedStyle {
         return isIdent(CSSName.DISPLAY, IdentValue.LIST_ITEM);
     }
 
-    public boolean isVisible() {
-        return isIdent(CSSName.VISIBILITY, IdentValue.VISIBLE);
+	/**
+     * Determine if the element is visible. This is normaly the case
+     * if visibility == visible. Only when visibilty is
+     * -fs-table-paginate-repeated-visible and we are in a repeated table header
+     * the element will also be visible. This allows to only show an element in the table header
+     * after a page break.
+     * @param renderingContext null or the current renderingContext. If null,
+     *                         then the -fs-table-paginate-repeated-visible logic
+     *                         will not work.
+	 * @param thisElement the element for which the visibility should be determined. Only required if
+     * -fs-table-paginate-repeated-visible is specified.
+     * @return true if the element is visible
+     */
+    public boolean isVisible(RenderingContext renderingContext, Box thisElement) {
+        IdentValue val = getIdent(CSSName.VISIBILITY);
+		if (val == IdentValue.VISIBLE)
+			return true;
+		if (renderingContext != null) {
+			if (val == IdentValue.FS_TABLE_PAGINATE_REPEATED_VISIBLE) {
+				/*
+				 * We need to find the parent TableBox which has a
+				 * ContentLimitContainer and can be repeated.
+				 */
+				Box parentElement = thisElement.getParent();
+				while (parentElement != null
+						&& !(parentElement.getStyle().isTable()
+                                && ((TableBox) parentElement).hasContentLimitContainer()))
+					parentElement = parentElement.getDocumentParent();
+
+				if (parentElement != null) {
+				    TableBox tableBox = (TableBox) parentElement;
+                    return !tableBox.isTableRenderedOnFirstPage(renderingContext);
+				}
+			}
+		}
+        return false;
     }
 
     public boolean isForcePageBreakBefore() {
@@ -1127,6 +1168,10 @@ public class CalculatedStyle {
     public int getColSpan() {
         int result = (int) asFloat(CSSName.FS_COLSPAN);
         return result > 0 ? result : 1;
+    }
+
+    public float getFSPageBreakMinHeight(CssContext c){
+        return getFloatPropertyProportionalTo(CSSName.FS_PAGE_BREAK_MIN_HEIGHT, 0, c);
     }
 
     public Length asLength(CssContext c, CSSName cssName) {
@@ -1243,7 +1288,22 @@ public class CalculatedStyle {
     public boolean isCanBeShrunkToFit() {
         return isInlineBlock() || isFloated() || isAbsolute() || isFixed();
     }
+    
+    public boolean isDirectionLTR() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.LTR);
+    }
+    
+    public boolean isDirectionRTL() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.RTL);
+    }
+    
+    public boolean isDirectionAuto() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.AUTO);
+    }
 
+	public IdentValue getDirection() {
+		return getIdent(CSSName.DIRECTION);
+	}
 }// end class
 
 /*

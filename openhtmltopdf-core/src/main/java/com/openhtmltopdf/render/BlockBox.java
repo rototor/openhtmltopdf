@@ -51,7 +51,6 @@ import com.openhtmltopdf.layout.PaintingInfo;
 import com.openhtmltopdf.layout.PersistentBFC;
 import com.openhtmltopdf.layout.Styleable;
 import com.openhtmltopdf.newtable.TableRowBox;
-import com.openhtmltopdf.render.LineBox.LTRvsRTL;
 
 /**
  * A block box as defined in the CSS spec.  It also provides a base class for
@@ -121,28 +120,6 @@ public class BlockBox extends Box implements InlinePaintable {
     protected String getExtraBoxDescription() {
         return "";
     }
-
-    /**
-     * Counts the RTL chars vs LTR chars in this block box. This is used by line box to know whether to align right
-     * or left given a predominantly left-to-right line or a predominantly right-to-left line.
-     * @param result
-     */
-    @Override
-	public void countRtlVsLtrChars(LTRvsRTL result) {
-    	
-    	if (getInlineContent() == null)
-    		return;
-    	
-    	
-        for (Iterator i = getInlineContent().iterator(); i.hasNext(); ) {
-            Styleable node = (Styleable) i.next();
-
-            if (node.getStyle().isInline()) {
-                InlineBox iB = (InlineBox) node;
-                iB.countRtlVsLtrChars(result);
-            }
-        }
-	}
     
     public String toString() {
         StringBuffer result = new StringBuffer();
@@ -256,7 +233,7 @@ public class BlockBox extends Box implements InlinePaintable {
     }
 
     public void paintListMarker(RenderingContext c) {
-        if (! getStyle().isVisible()) {
+        if (! getStyle().isVisible(c, this)) {
             return;
         }
 
@@ -281,7 +258,7 @@ public class BlockBox extends Box implements InlinePaintable {
     }
 
     public void paintInline(RenderingContext c) {
-        if (! getStyle().isVisible()) {
+        if (! getStyle().isVisible(c, this)) {
             return;
         }
 
@@ -550,9 +527,27 @@ public class BlockBox extends Box implements InlinePaintable {
         calcChildLocations();
     }
 
+	/**
+     * Using the css:
+     *
+     * -fs-page-break-min-height: 5cm;
+     *
+     * on a block element you can force a pagebreak before this block, if not
+     * enough space (e.g. 5cm in this case) is remaining on the current page for the block.
+     *
+     * @return true if a pagebreak is needed before this block because
+     * there is not enough space left on the current page.
+     */
+    public boolean isPageBreakNeededBecauseOfMinHeight(LayoutContext context){
+        float minHeight = getStyle().getFSPageBreakMinHeight(context);
+        PageBox page = context.getRootLayer().getFirstPage(context, this);
+        return page != null && getAbsY() + minHeight > page.getBottom();
+    }
+
+
     public void positionAbsoluteOnPage(LayoutContext c) {
         if (c.isPrint() &&
-                (getStyle().isForcePageBreakBefore() || isNeedPageClear())) {
+                (getStyle().isForcePageBreakBefore() || isNeedPageClear() || isPageBreakNeededBecauseOfMinHeight(c))) {
             forcePageBreakBefore(c, getStyle().getIdent(CSSName.PAGE_BREAK_BEFORE), false);
             calcCanvasLocation();
             calcChildLocations();

@@ -167,7 +167,7 @@ public abstract class AbstractOutputDevice implements OutputDevice {
     }
 
     public void paintBorder(RenderingContext c, Box box) {
-        if (! box.getStyle().isVisible()) {
+        if (! box.getStyle().isVisible(c, box)) {
             return;
         }
 
@@ -200,7 +200,7 @@ public abstract class AbstractOutputDevice implements OutputDevice {
     }
 
     public void paintBackground(RenderingContext c, Box box) {
-        if (! box.getStyle().isVisible()) {
+        if (! box.getStyle().isVisible(c, box)) {
             return;
         }
 
@@ -231,7 +231,7 @@ public abstract class AbstractOutputDevice implements OutputDevice {
             return;
         }
         
-        Area borderBounds = new Area(BorderPainter.generateBorderBounds(backgroundBounds, border, false));
+        Area borderBounds = new Area(BorderPainter.generateBorderBounds(backgroundBounds, border, true));
 
         Shape oldclip = getClip();
         if(oldclip != null) {

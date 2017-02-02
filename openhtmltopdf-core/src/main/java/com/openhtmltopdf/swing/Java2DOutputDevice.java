@@ -19,34 +19,24 @@
  */
 package com.openhtmltopdf.swing;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.Paint;
-import java.awt.Point;
-import java.awt.Rectangle;
-import java.awt.Shape;
-import java.awt.Stroke;
-import java.awt.RenderingHints.Key;
-import java.awt.font.GlyphVector;
-import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-
-import javax.swing.*;
-
 import com.openhtmltopdf.css.parser.FSColor;
 import com.openhtmltopdf.css.parser.FSRGBColor;
 import com.openhtmltopdf.extend.FSGlyphVector;
 import com.openhtmltopdf.extend.FSImage;
 import com.openhtmltopdf.extend.OutputDevice;
 import com.openhtmltopdf.extend.ReplacedElement;
-import com.openhtmltopdf.render.AbstractOutputDevice;
-import com.openhtmltopdf.render.BlockBox;
-import com.openhtmltopdf.render.FSFont;
-import com.openhtmltopdf.render.InlineLayoutBox;
-import com.openhtmltopdf.render.InlineText;
-import com.openhtmltopdf.render.JustificationInfo;
-import com.openhtmltopdf.render.RenderingContext;
+import com.openhtmltopdf.render.*;
+
+import javax.swing.*;
+
+import java.awt.*;
+import java.awt.RenderingHints.Key;
+import java.awt.font.GlyphVector;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
+import java.awt.image.BufferedImage;
+import java.util.*;
+import java.util.List;
 
 public class Java2DOutputDevice extends AbstractOutputDevice implements OutputDevice {
     private final Graphics2D _graphics;
@@ -290,22 +280,24 @@ public class Java2DOutputDevice extends AbstractOutputDevice implements OutputDe
         return true;
     }
 
+    private Stack<AffineTransform> transformStack = new Stack<AffineTransform>();
+    private Stack<Shape> clipStack= new Stack<Shape>();
+
 	@Override
 	public void saveState() {
-		// TODO Auto-generated method stub
-		
+		transformStack.push(_graphics.getTransform());
+		clipStack.push(_graphics.getClip());
 	}
 
 	@Override
 	public void restoreState() {
-		// TODO Auto-generated method stub
-		
+		_graphics.setTransform(transformStack.pop());
+		_graphics.setClip(clipStack.pop());
 	}
 
 	@Override
 	public void setPaint(Paint paint) {
-		// TODO Auto-generated method stub
-		
+		_graphics.setPaint(paint);
 	}
 
 	@Override
@@ -330,5 +322,32 @@ public class Java2DOutputDevice extends AbstractOutputDevice implements OutputDe
 	public Shape getRawClip() {
 		// TODO Auto-generated method stub
 		return null;
+	}
+
+    @Override
+    public List<AffineTransform> pushTransforms(List<AffineTransform> transforms) {
+//		AffineTransform currentTransform  = _graphics.getTransform();
+//		currentTransform.concatenate(transform);
+//        _graphics.setTransform(currentTransform);
+// TODO
+    	return Collections.emptyList();
+    }
+
+	@Override
+	public void popTransforms(List<AffineTransform> inverse) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public float getAbsoluteTransformOriginX() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public float getAbsoluteTransformOriginY() {
+		// TODO Auto-generated method stub
+		return 0;
 	}
 }

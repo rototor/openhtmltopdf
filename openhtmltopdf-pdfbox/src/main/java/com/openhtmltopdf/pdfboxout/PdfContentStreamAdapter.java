@@ -2,6 +2,7 @@ package com.openhtmltopdf.pdfboxout;
 
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
+import java.util.Locale;
 
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
@@ -285,11 +286,19 @@ public class PdfContentStreamAdapter {
     }
 
     public void setTextSpacing(float nonSpaceAdjust) {
-        // TODO Not currently supported in PDF-BOX.
+        try {
+            cs.appendRawCommands(String.format(Locale.US, "%.4f Tc\n", nonSpaceAdjust));
+        } catch (IOException e) {
+            logAndThrow("setSpaceSpacing", e);
+        }
     }
 
     public void setSpaceSpacing(float spaceAdjust) {
-        // TODO Not currently supported in PDF-BOX.
+        try {
+            cs.appendRawCommands(String.format(Locale.US, "%.4f Tw\n", spaceAdjust));
+        } catch (IOException e) {
+            logAndThrow("setSpaceSpacing", e);
+        }
     }
 
     public void setPdfMatrix(AffineTransform transform) {

@@ -272,7 +272,7 @@ public final class CSSName implements Comparable {
                     NOT_INHERITED,
                     new PrimitivePropertyBuilders.FSCheckboxStyle()
             );
-    
+
     /**
      * Unique CSSName instance for CSS2 property.
      */
@@ -406,6 +406,19 @@ public final class CSSName implements Comparable {
             );
 
     /**
+     * Perform a page break before this element, if not at least the specified space is
+     * left on the current page.
+     */
+    public final static CSSName FS_PAGE_BREAK_MIN_HEIGHT =
+            addProperty(
+                    "-fs-page-break-min-height",
+                    PRIMITIVE,
+                    "0",
+                    INHERITS,
+                    new PrimitivePropertyBuilders.FSPageBreakMinHeight()
+            );
+
+    /**
      * Unique CSSName instance for CSS2 property.
      */
     public final static CSSName BOTTOM =
@@ -514,8 +527,8 @@ public final class CSSName implements Comparable {
                     PRIMITIVE,
                     "ltr",
                     INHERITS,
-                    false,
-                    null
+                    true,
+                    new PrimitivePropertyBuilders.Direction()
             );
 
     /**
@@ -1106,6 +1119,38 @@ public final class CSSName implements Comparable {
             );
 
     /**
+     * Unique CSSName instance for CSS3 property.
+     */
+    public final static CSSName TRANSFORM =
+            addProperty(
+                    "transform",
+                    PRIMITIVE,
+                    "none",
+                    NOT_INHERITED,
+                    new PrimitivePropertyBuilders.TransformPropertyBuilder()
+            );
+    
+    public final static CSSName FS_TRANSFORM_ORIGIN_X = 
+    		addProperty(
+    				"-fs-transform-origin-x",
+    				PRIMITIVE,
+    				"50%",
+    				NOT_INHERITED,
+    				new PrimitivePropertyBuilders.TransformOriginX()
+    		);
+
+    public final static CSSName FS_TRANSFORM_ORIGIN_Y = 
+    		addProperty(
+    				"-fs-transform-origin-y",
+    				PRIMITIVE,
+    				"50%",
+    				NOT_INHERITED,
+    				new PrimitivePropertyBuilders.TransformOriginY()
+    		);
+
+    
+    
+    /**
      * Unique CSSName instance for CSS2 property.
      */
     public final static CSSName WORD_SPACING =
@@ -1316,7 +1361,7 @@ public final class CSSName implements Comparable {
                     true,
                     new PrimitivePropertyBuilders.BorderBottomLeftRadius()
             );
-    
+
     /**
      * Unique CSSName instance for CSS2 property.
      */
@@ -1418,7 +1463,7 @@ public final class CSSName implements Comparable {
                     NOT_INHERITED,
                     new BackgroundPropertyBuilder()
             );
-    
+
 
     /**
      * Unique CSSName instance for CSS3 property.
@@ -1610,6 +1655,18 @@ public final class CSSName implements Comparable {
                     NOT_INHERITED,
                     new SizePropertyBuilder()
             );
+    
+    /**
+     * Unique CSSName instance for CSS3 property.
+     */
+    public final static CSSName TRANSFORM_ORIGIN_SHORTHAND =
+            addProperty(
+                    "transform-origin",
+                    SHORTHAND,
+                    "50% 50%",
+                    NOT_INHERITED,
+                    new PrimitivePropertyBuilders.TransformOriginPropertyBuilder()
+            );
 
     public final static CSSSideProperties MARGIN_SIDE_PROPERTIES =
             new CSSSideProperties(
@@ -1645,7 +1702,6 @@ public final class CSSName implements Comparable {
                     CSSName.BORDER_RIGHT_COLOR,
                     CSSName.BORDER_BOTTOM_COLOR,
                     CSSName.BORDER_LEFT_COLOR);
-
 
     /**
      * Constructor for the CSSName object

@@ -19,37 +19,22 @@
  */
 package com.openhtmltopdf.pdfboxout;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Paint;
-import java.awt.Rectangle;
-import java.awt.Shape;
-import java.awt.Stroke;
-import java.awt.RenderingHints.Key;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Area;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Line2D;
-import java.awt.geom.NoninvertibleTransformException;
-import java.awt.geom.PathIterator;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.Map.Entry;
-import java.util.logging.Level;
-import java.util.regex.Pattern;
-
-import javax.imageio.ImageIO;
+import com.openhtmltopdf.bidi.BidiReorderer;
+import com.openhtmltopdf.bidi.SimpleBidiReorderer;
+import com.openhtmltopdf.css.constants.CSSName;
+import com.openhtmltopdf.css.parser.FSCMYKColor;
+import com.openhtmltopdf.css.parser.FSColor;
+import com.openhtmltopdf.css.parser.FSRGBColor;
+import com.openhtmltopdf.css.style.CalculatedStyle;
+import com.openhtmltopdf.css.style.CssContext;
+import com.openhtmltopdf.extend.FSImage;
+import com.openhtmltopdf.extend.OutputDevice;
+import com.openhtmltopdf.layout.SharedContext;
+import com.openhtmltopdf.pdfboxout.PdfBoxFontResolver.FontDescription;
+import com.openhtmltopdf.pdfboxout.PdfBoxForm.CheckboxStyle;
+import com.openhtmltopdf.render.*;
+import com.openhtmltopdf.util.Configuration;
+import com.openhtmltopdf.util.XRLog;
 
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -73,91 +58,161 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
-import com.openhtmltopdf.bidi.BidiReorderer;
-import com.openhtmltopdf.bidi.SimpleBidiReorderer;
-import com.openhtmltopdf.css.constants.CSSName;
-import com.openhtmltopdf.css.parser.FSCMYKColor;
-import com.openhtmltopdf.css.parser.FSColor;
-import com.openhtmltopdf.css.parser.FSRGBColor;
-import com.openhtmltopdf.css.style.CalculatedStyle;
-import com.openhtmltopdf.css.style.CssContext;
-import com.openhtmltopdf.extend.FSImage;
-import com.openhtmltopdf.extend.OutputDevice;
-import com.openhtmltopdf.layout.SharedContext;
-import com.openhtmltopdf.pdfboxout.PdfBoxFontResolver.FontDescription;
-import com.openhtmltopdf.pdfboxout.PdfBoxForm.CheckboxStyle;
-import com.openhtmltopdf.render.AbstractOutputDevice;
-import com.openhtmltopdf.render.BlockBox;
-import com.openhtmltopdf.render.Box;
-import com.openhtmltopdf.render.FSFont;
-import com.openhtmltopdf.render.InlineLayoutBox;
-import com.openhtmltopdf.render.InlineText;
-import com.openhtmltopdf.render.JustificationInfo;
-import com.openhtmltopdf.render.PageBox;
-import com.openhtmltopdf.render.RenderingContext;
-import com.openhtmltopdf.util.Configuration;
-import com.openhtmltopdf.util.XRLog;
+import javax.imageio.ImageIO;
+
+import java.awt.*;
+import java.awt.RenderingHints.Key;
+import java.awt.geom.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.*;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.logging.Level;
+import java.util.regex.Pattern;
 
 public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDevice {
+    //
+    // A discussion on units:
+    //   PDF points are defined as 1/72 inch.
+    //   CSS pixels are defined as 1/96 inch.
+    //   PDF text units are defined as 1/1000 of a PDF point.
+    //   OpenHTMLtoPDF dots are defined as 1/20 of a CSS pixel.
+    //   Therefore dots per point is 20 * 96/72 or about 26.66.
+    //   Dividing by _dotsPerPoint will convert OpenHTMLtoPDF dots to PDF points.
+    //   Theoretically, this is all configurable, but not tested at all with other values.
+    //
+    
     private static final int FILL = 1;
     private static final int STROKE = 2;
     private static final int CLIP = 3;
 
     private static final AffineTransform IDENTITY = new AffineTransform();
-
     private static final BasicStroke STROKE_ONE = new BasicStroke(1);
 
     private static final boolean ROUND_RECT_DIMENSIONS_DOWN = Configuration.isTrue("xr.pdf.round.rect.dimensions.down", false);
 
+    // The current PDF page.
     private PDPage _page;
+    
+    // A wrapper around the IOException throwing content stream methods which only throws runtime exceptions.
+    // Created for every page.
     private PdfContentStreamAdapter _cp;
+    
+    // We need the page height because the project uses top down units which PDFs use bottom up units.
+    // This is in PDF points unit (1/72 inch).
     private float _pageHeight;
 
+    // The desired font as set by setFont.
+    // This may not yet be set on the PDF text stream.
     private PdfBoxFSFont _font;
 
+    // This transform is a scale and translate.
+    // It scales from internal dots to PDF points.
+    // It translates positions to implement page margins.
     private AffineTransform _transform = new AffineTransform();
+    
+    // A stack of currently in force transforms on the PDF graphics state.
+    // NOTE: Transforms are cumulative and order is important.
+    // After the graphics state is restored in setClip we must appropriately reapply the transforms
+    // that should be in effect.
+    private final Deque<AffineTransform> transformStack = new ArrayDeque<AffineTransform>();
 
+    // An index into the transformStack. When we save state we set this to the length of transformStack
+    // then we know we have to reapply those transforms set after saving state upon restoring state.
+    private int clipTransformIndex;
+    
+    // We use these to keep track of where the current transform-origin is in absolute internal dots units.
+    private float _absoluteTransformOriginX = 0;
+    private float _absoluteTransformOriginY = 0;
+    
+    // The desired color as set by setColor.
+    // To make sure this color is set on the PDF graphics stream call ensureFillColor or ensureStrokeColor.
     private FSColor _color = FSRGBColor.BLACK;
+
+    // The actual fill and stroke colors set on the PDF graphics stream.
+    // We keep these so we don't bloat the PDF with unneeded color calls.
     private FSColor _fillColor;
     private FSColor _strokeColor;
 
+    // The currently set stroke. This will not yet be set on the PDF graphics stream.
+    // This is already transformed to PDF points units.
+    // Call setStrokeDiff to set this on the PDF graphics stream.
     private Stroke _stroke = null;
+    
+    // Same as _stroke, but not transformed. That is, it is in internal dots units.
     private Stroke _originalStroke = null;
+    
+    // The currently set stroke on the PDF graphics stream. When we call setStokeDiff
+    // this is compared with _stroke and only the differences are output to the graphics stream.
     private Stroke _oldStroke = null;
 
+    // The clipped area, as set on the PDF graphics stream, in PDF points units.
     private Area _clip;
 
+    // Essentially per-run global variables.
     private SharedContext _sharedContext;
+    
+    // The project internal dots per PDF point unit. See discussion of units above.
     private float _dotsPerPoint;
 
+    // The PDF document. Note: We are not responsible for closing it.
     private PDDocument _writer;
 
+    // The default destination for the current page.
+    // This is used to create bookmarks without a valid destination.
     private PDDestination _defaultDestination;
 
-    private List _bookmarks = new ArrayList();
+    // Contains a list of bookmarks for the document.
+    private final List<Bookmark> _bookmarks = new ArrayList<Bookmark>();
 
-    private List _metadata = new ArrayList();
+    // Contains a list of metadata items for the document.
+    private final List<Metadata> _metadata = new ArrayList<Metadata>();
     
+    // We keep a map of forms for the document so we can add controls to the correct form as they are seen.
     private final Map<Element, PdfBoxForm> forms = new HashMap<Element, PdfBoxForm>();
-    private final Set<Element> seenForms = new HashSet<Element>();
+
+    // The list of controls in the document. Control class contains all the info we need to output a control.
     private final List<PdfBoxForm.Control> controls = new ArrayList<PdfBoxForm.Control>();
+
+    // A set of controls, so we don't double process a control.
     private final Set<Element> seenControls = new HashSet<Element>();
+
+    // We keep a map of fonts to font resource name so we don't double add fonts needed for form controls.
     private final Map<PDFont, String> controlFonts = new HashMap<PDFont, String>();
-    final Map<CheckboxStyle, PDAppearanceStream> checkboxAppearances = new EnumMap<CheckboxStyle, PDAppearanceStream>(CheckboxStyle.class);
-    PDAppearanceStream checkboxOffAppearance;
     
+    // The checkbox style to appearance stream map. We only create appearance streams on demand and once for a specific
+    // style so we store appearance streams created here.
+    final Map<CheckboxStyle, PDAppearanceStream> checkboxAppearances = new EnumMap<CheckboxStyle, PDAppearanceStream>(CheckboxStyle.class);
+
+    // Again, we only create these appearance streams as needed.
+    PDAppearanceStream checkboxOffAppearance;
+    PDAppearanceStream radioBoxOffAppearance;
+    PDAppearanceStream radioBoxOnAppearance;
+    
+    // The root box in the document. We keep this so we can search for specific boxes below it
+    // such as links or form controls which we need to position.
     private Box _root;
 
+    // In theory, we can append to a PDF document, rather than creating new. This keeps the start page
+    // so we can use it to offset when we need to know the PDF page number.
+    // NOTE: Not tested recently, this feature may be broken.
     private int _startPageNo;
-
-    private int _nextFormFieldIndex;
     
+    // Whether we are in test mode, currently not used here, but keep around in case we need it down the track.
+    @SuppressWarnings("unused")
     private final boolean _testMode;
     
+    // Link manage handles a links. We add the link in paintBackground and then output links when the document is finished.
     private PdfBoxLinkManager _linkManager;
     
+    // Not used currently.
+    @SuppressWarnings("unused")
     private RenderingContext _renderingContext;
     
+    // The bidi reorderer is responsible for shaping Arabic text, deshaping and 
+    // converting RTL text into its visual order.
     private BidiReorderer _reorderer = new SimpleBidiReorderer();
 
     public PdfBoxOutputDevice(float dotsPerPoint, boolean testMode) {
@@ -173,19 +228,24 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         return _writer;
     }
 
-    public int getNextFormFieldIndex() {
-        return ++_nextFormFieldIndex;
-    }
-
+    /**
+     * Start a page. A new PDF page starts a new content stream so all graphics state has to be 
+     * set back to default.
+     */
     public void initializePage(PDPageContentStream currentPage, PDPage page, float height) {
         _cp = new PdfContentStreamAdapter(currentPage);
         _page = page;
         _pageHeight = height;
 
+        // We call saveGraphics so we can get back to a raw (unclipped) state after we have clipped.
+        // restoreGraphics is only used by setClip and page finish.
         _cp.saveGraphics();
-
+        
         _transform = new AffineTransform();
         _transform.scale(1.0d / _dotsPerPoint, 1.0d / _dotsPerPoint);
+
+        _absoluteTransformOriginX = 0;
+        _absoluteTransformOriginY += height * _dotsPerPoint;
 
         _stroke = transformStroke(STROKE_ONE);
         _originalStroke = _stroke;
@@ -194,6 +254,7 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         setStrokeDiff(_stroke, null);
 
         if (_defaultDestination == null) {
+            // Create a default destination to the top of the first page.
             PDPageFitHeightDestination dest = new PDPageFitHeightDestination();
             dest.setPage(page);
         }
@@ -209,16 +270,18 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         element.paint(c, this, box);
     }
 
+    /**
+     * We use paintBackground to do extra stuff such as processing links, forms and form controls.
+     */
     public void paintBackground(RenderingContext c, Box box) {
         super.paintBackground(c, box);
 
         _linkManager.processLinkLater(c, box, _page, _pageHeight, _transform);
        
         if (box.getElement() != null && box.getElement().getNodeName().equals("form")) {
-            if (!seenForms.contains(box.getElement())) {
+            if (!forms.containsKey(box.getElement())) {
                 PdfBoxForm frm = PdfBoxForm.createForm(box.getElement());
                 forms.put(box.getElement(), frm);
-                seenForms.add(box.getElement());
             }
         } else if (box.getElement() != null &&
                 (box.getElement().getNodeName().equals("input") ||
@@ -244,7 +307,8 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
             String fontName = null;
             
             if (!(ctrl.box.getElement().getAttribute("type").equals("checkbox") ||
-                  ctrl.box.getElement().getAttribute("type").equals("radio"))) {
+                  ctrl.box.getElement().getAttribute("type").equals("radio") ||
+                  ctrl.box.getElement().getAttribute("type").equals("hidden"))) {
                 PDFont fnt = ((PdfBoxFSFont) _sharedContext.getFont(ctrl.box.getStyle().getFontSpecification())).getFontDescription().get(0).getFont();
 
                 if (!controlFonts.containsKey(fnt)) {
@@ -269,6 +333,19 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
                 if (checkboxOffAppearance == null) {
                     checkboxOffAppearance = PdfBoxForm.createCheckboxAppearance("q\nQ\n", getWriter(), checkBoxFontResource);
                 }
+            } else if (ctrl.box.getElement().getAttribute("type").equals("radio")) {
+                if (checkBoxFontResource == null) {
+                    checkBoxFontResource = new PDResources();
+                    checkBoxFontResource.put(COSName.getPDFName("OpenHTMLZap"), PDType1Font.ZAPF_DINGBATS);
+                }
+
+                if (radioBoxOffAppearance == null) {
+                    radioBoxOffAppearance = PdfBoxForm.createCheckboxAppearance("q\nQ\n", getWriter(), checkBoxFontResource);
+                }
+
+                if (radioBoxOnAppearance == null) {
+                    radioBoxOnAppearance = PdfBoxForm.createCheckboxAppearance(CheckboxStyle.DIAMOND, getWriter(), checkBoxFontResource);
+                }
             }
                 
             if (frm != null) {
@@ -281,19 +358,21 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
             resources.put(COSName.getPDFName(fnt.getValue()), fnt.getKey());
         }
         
-        int start = 0;
-        PDAcroForm acro = new PDAcroForm(_writer);
+        if (forms.size() != 0) {
+            int start = 0;
+            PDAcroForm acro = new PDAcroForm(_writer);
 
-        acro.setNeedAppearances(Boolean.TRUE);
-        acro.setDefaultResources(resources);
+            acro.setNeedAppearances(Boolean.TRUE);
+            acro.setDefaultResources(resources);
         
-        _writer.getDocumentCatalog().setAcroForm(acro);
+            _writer.getDocumentCatalog().setAcroForm(acro);
         
-        for (PdfBoxForm frm : forms.values()) {
-            try {
-                start = 1 + frm.process(acro, start, _root, this);
-            } catch (IOException e) {
-                throw new PdfContentStreamAdapter.PdfException("processControls", e);
+            for (PdfBoxForm frm : forms.values()) {
+                try {
+                    start = 1 + frm.process(acro, start, _root, this);
+                } catch (IOException e) {
+                    throw new PdfContentStreamAdapter.PdfException("processControls", e);
+                }
             }
         }
     }
@@ -321,10 +400,12 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         return null;
     }
 
+    /**
+     * Given a value in dots units, converts to PDF points.
+     */
     public float getDeviceLength(float length) {
         return length / _dotsPerPoint;
     }
-
 
     public void drawBorderLine(Shape bounds, int side, int lineWidth, boolean solid) {
         draw(bounds);
@@ -390,6 +471,9 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         _font = ((PdfBoxFSFont) font);
     }
 
+    /**
+     * This returns a matrix that will convert y values to bottom up coordinate space (as used by PDFs).
+     */
     private AffineTransform normalizeMatrix(AffineTransform current) {
         double[] mx = new double[6];
         AffineTransform result = new AffineTransform();
@@ -452,10 +536,14 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         _cp.beginText();
         _cp.setFont(desc.getFont(), fontSize);
         _cp.setTextMatrix((float) mx[0], b, c, (float) mx[3], (float) mx[4], (float) mx[5]);
-        
-        if (info != null) {
-            _cp.setTextSpacing(info.getNonSpaceAdjust());
-            _cp.setSpaceSpacing(info.getSpaceAdjust());
+
+        if (info != null ) {
+            // The JustificationInfo numbers need to be normalized using the current document DPI
+            _cp.setTextSpacing(info.getNonSpaceAdjust() / _dotsPerPoint);
+            _cp.setSpaceSpacing(info.getSpaceAdjust() / _dotsPerPoint);
+        } else {
+            _cp.setTextSpacing(0.0f);
+            _cp.setSpaceSpacing(0.0f);
         }
         
         _cp.drawString(s);
@@ -667,6 +755,9 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         }
     }
 
+    /**
+     * Converts a top down unit to a bottom up PDF unit.
+     */
     private float normalizeY(float y) {
         return _pageHeight - y;
     }
@@ -782,8 +873,19 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     }
 
     public void setClip(Shape s) {
+        // Restore graphics to get back to a no-clip situation.
         _cp.restoreGraphics();
+
+        // Reapply the transforms that are in effect.
+        reapplyTransforms();
+        
+        // Save graphics so we can do this again.
         _cp.saveGraphics();
+        
+        // Set the index so we know which transforms have to be reapplied
+        // when we next restore graphics.
+        clipTransformIndex = transformStack.size();
+        
         if (s != null)
             s = _transform.createTransformedShape(s);
         if (s == null) {
@@ -907,9 +1009,9 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         }
     }
 
-    private void writeBookmarks(RenderingContext c, Box root, PDOutlineNode parent, List bookmarks) {
-        for (Iterator i = bookmarks.iterator(); i.hasNext();) {
-            Bookmark bookmark = (Bookmark) i.next();
+    private void writeBookmarks(RenderingContext c, Box root, PDOutlineNode parent, List<Bookmark> bookmarks) {
+        for (Iterator<Bookmark> i = bookmarks.iterator(); i.hasNext();) {
+            Bookmark bookmark = i.next();
             writeBookmark(c, root, parent, bookmark);
         }
     }
@@ -951,10 +1053,10 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         if (head != null) {
             Element bookmarks = DOMUtil.getChild(head, "bookmarks");
             if (bookmarks != null) {
-                List l = DOMUtil.getChildren(bookmarks, "bookmark");
+                List<Element> l = DOMUtil.getChildren(bookmarks, "bookmark");
                 if (l != null) {
-                    for (Iterator i = l.iterator(); i.hasNext();) {
-                        Element e = (Element) i.next();
+                    for (Iterator<Element> i = l.iterator(); i.hasNext();) {
+                        Element e = i.next();
                         loadBookmark(null, e);
                     }
                 }
@@ -969,23 +1071,20 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         } else {
             parent.addChild(us);
         }
-        List l = DOMUtil.getChildren(bookmark, "bookmark");
+        List<Element> l = DOMUtil.getChildren(bookmark, "bookmark");
         if (l != null) {
-            for (Iterator i = l.iterator(); i.hasNext();) {
-                Element e = (Element) i.next();
+            for (Iterator<Element> i = l.iterator(); i.hasNext();) {
+                Element e = i.next();
                 loadBookmark(us, e);
             }
         }
     }
 
     private static class Bookmark {
-        private String _name;
-        private String _HRef;
+        private final String _name;
+        private final String _HRef;
 
-        private List _children;
-
-        public Bookmark() {
-        }
+        private List<Bookmark> _children;
 
         public Bookmark(String name, String href) {
             _name = name;
@@ -996,27 +1095,19 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
             return _HRef;
         }
 
-        public void setHRef(String href) {
-            _HRef = href;
-        }
-
         public String getName() {
             return _name;
         }
 
-        public void setName(String name) {
-            _name = name;
-        }
-
         public void addChild(Bookmark child) {
             if (_children == null) {
-                _children = new ArrayList();
+                _children = new ArrayList<Bookmark>();
             }
             _children.add(child);
         }
 
-        public List getChildren() {
-            return _children == null ? Collections.EMPTY_LIST : _children;
+        public List<Bookmark> getChildren() {
+            return _children == null ? Collections.<Bookmark>emptyList() : _children;
         }
     }
 
@@ -1095,10 +1186,10 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     private void loadMetadata(Document doc) {
         Element head = DOMUtil.getChild(doc.getDocumentElement(), "head");
         if (head != null) {
-            List l = DOMUtil.getChildren(head, "meta");
+            List<Element> l = DOMUtil.getChildren(head, "meta");
             if (l != null) {
-                for (Iterator i = l.iterator(); i.hasNext();) {
-                    Element e = (Element) i.next();
+                for (Iterator<Element> i = l.iterator(); i.hasNext();) {
+                    Element e = i.next();
                     String name = e.getAttribute("name");
                     if (name != null) { // ignore non-name metadata data
                         String content = e.getAttribute("content");
@@ -1283,13 +1374,73 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     public void setBidiReorderer(BidiReorderer reorderer) {
         _reorderer = reorderer;
     }
-
+    
     @Override
-    public void saveState() {
-        _cp.saveGraphics();
+    public void popTransforms(List<AffineTransform> inverse) {
+       Collections.reverse(inverse);
+       for (AffineTransform transform : inverse) {
+           transformStack.pop();
+           _cp.setPdfMatrix(transform);
+       }
+    }
+    
+    @Override
+    public List<AffineTransform> pushTransforms(List<AffineTransform> transforms) {
+        List<AffineTransform> inverse = new ArrayList<AffineTransform>(transforms.size());
+        try {
+            for (AffineTransform transform : transforms) {
+                double[] mx = new double[6];
+                transform.getMatrix(mx);
+                mx[4] /= _dotsPerPoint;
+                mx[5] /= _dotsPerPoint;
+                mx[5] = -mx[5];
+               
+                AffineTransform normalized = new AffineTransform(mx);
+                inverse.add(normalized.createInverse());
+                transformStack.push(normalized);
+                _cp.setPdfMatrix(normalized);
+            }
+        } catch (NoninvertibleTransformException e) {
+            XRLog.render(Level.WARNING, "Tried to set a non-invertible CSS transform. Ignored.");
+        }
+        return inverse;
+    }
+    
+    // FIXME: Not sure if this is ever needed.
+    private void reapplyTransforms() {
+        int idx = 0;
+
+        for (Iterator<AffineTransform> iter = transformStack.descendingIterator(); iter.hasNext(); ) {
+            AffineTransform transform = iter.next();
+            if (idx >= clipTransformIndex) {
+                _cp.setPdfMatrix(transform);
+            }
+            idx++;
+        }
     }
 
     @Override
+    public float getAbsoluteTransformOriginX() {
+        return _absoluteTransformOriginX;
+    }
+    
+    @Override
+    public float getAbsoluteTransformOriginY() {
+        return _absoluteTransformOriginY;
+    }
+    
+
+    // The below methods are for the experimental SVG code and should not be used for other uses.
+    
+    @Override
+    @Deprecated
+    public void saveState() {
+        _cp.saveGraphics();
+        
+    }
+
+    @Override
+    @Deprecated
     public void restoreState() {
         _cp.restoreGraphics();
     }
@@ -1310,12 +1461,14 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     }
 
     @Override
+    @Deprecated
     public void setRawClip(Shape s) {
         _clip = new Area(s);
         followPath(s, CLIP);
     }
 
     @Override
+    @Deprecated
     public void rawClip(Shape s) {
         if (_clip == null)
             _clip = new Area(s);
@@ -1325,6 +1478,7 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     }
     
     @Override
+    @Deprecated
     public Shape getRawClip() {
         return _clip;
     }

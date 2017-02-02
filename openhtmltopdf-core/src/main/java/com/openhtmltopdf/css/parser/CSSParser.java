@@ -97,8 +97,7 @@ public class CSSParser {
 
     public Ruleset parseDeclaration(int origin, String text) {
         try {
-            // XXX Set this to something more reasonable
-            _URI = "style attribute";
+            _URI = ThreadCtx.get().sharedContext().getBaseURL();
             reset(new StringReader(text));
 
             skip_whitespace();
@@ -1476,7 +1475,6 @@ public class CSSParser {
         }
         PropertyValue result = null;
         switch (t.getType()) {
-            case Token.ANGLE:
             case Token.TIME:
             case Token.FREQ:
             case Token.DIMENSION:
@@ -1485,6 +1483,24 @@ public class CSSParser {
                 result = new PropertyValue(
                         CSSPrimitiveValue.CSS_NUMBER,
                         sign*Float.parseFloat(getTokenValue(t)),
+                        sign(sign) + getTokenValue(t));
+                next();
+                skip_whitespace();
+                break;
+            case Token.ANGLE:
+            	String unit = extractUnit(t);
+            	short type = CSSPrimitiveValue.CSS_UNKNOWN;
+
+            	if ("deg".equals(unit))
+            		type = CSSPrimitiveValue.CSS_DEG;
+            	else if ("rad".equals(unit))
+            		type = CSSPrimitiveValue.CSS_RAD;
+            	else if ("grad".equals(unit))
+            		type = CSSPrimitiveValue.CSS_GRAD;
+            	
+                result = new PropertyValue(
+                        type,
+                        sign*Float.parseFloat(extractNumber(t)),
                         sign(sign) + getTokenValue(t));
                 next();
                 skip_whitespace();
