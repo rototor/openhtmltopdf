@@ -184,13 +184,12 @@ public class PDFTranscoder extends SVGAbstractTranscoder {
 	
 	@Override
 	protected void transcode(Document svg, String uri, TranscoderOutput out) throws TranscoderException {
+		
+		// Note: We have to initialize user agent here and not in ::createUserAgent() as method
+		// is called before our constructor is called in the super constructor.
 		this.userAgent = new OpenHtmlUserAgent(this.fontResolver);
 		super.transcode(svg, uri, out);
 
-		float x = (float) (this.x * this.dotsPerPoint);
-		float y = (float) (this.y * this.dotsPerPoint);
-		//final float width = (float) (this.width * this.dotsPerPoint);
-		//final float height = (float) (this.height * this.dotsPerPoint);
 		outputDevice.drawWithGraphics((float)x, (float)y, (float)width, (float)height, new OutputDeviceGraphicsDrawer() {
 			@Override
 			public void render(Graphics2D graphics2D) {
@@ -206,6 +205,11 @@ public class PDFTranscoder extends SVGAbstractTranscoder {
 				PDFTranscoder.this.root.paint(graphics2D);
 			}
 		});
+	}
+	
+	@Override
+	protected org.apache.batik.bridge.UserAgent createUserAgent() {
+		return null;
 	}
 	
 	@Override
