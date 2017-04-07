@@ -959,6 +959,10 @@ public class CalculatedStyle {
     }
 
     public boolean requiresLayer() {
+    	if (!isIdent(CSSName.TRANSFORM, IdentValue.NONE)) {
+    		return true;
+    	}
+    	
         FSDerivedValue value = valueByName(CSSName.POSITION);
 
         if (value instanceof FunctionValue) {  // running(header)
@@ -1284,7 +1288,22 @@ public class CalculatedStyle {
     public boolean isCanBeShrunkToFit() {
         return isInlineBlock() || isFloated() || isAbsolute() || isFixed();
     }
+    
+    public boolean isDirectionLTR() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.LTR);
+    }
+    
+    public boolean isDirectionRTL() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.RTL);
+    }
+    
+    public boolean isDirectionAuto() {
+    	return isIdent(CSSName.DIRECTION, IdentValue.AUTO);
+    }
 
+	public IdentValue getDirection() {
+		return getIdent(CSSName.DIRECTION);
+	}
 }// end class
 
 /*

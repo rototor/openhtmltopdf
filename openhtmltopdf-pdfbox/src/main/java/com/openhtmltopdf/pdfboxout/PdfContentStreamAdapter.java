@@ -1,18 +1,20 @@
 package com.openhtmltopdf.pdfboxout;
 
-import java.awt.geom.AffineTransform;
-import java.io.IOException;
-
+import com.openhtmltopdf.util.XRLog;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState;
 import org.apache.pdfbox.util.Matrix;
 
-import com.openhtmltopdf.util.XRLog;
+import java.awt.geom.AffineTransform;
+import java.io.IOException;
+import java.util.Locale;
 
 public class PdfContentStreamAdapter {
     private final PDPageContentStream cs;
+
 
     public static class PdfException extends RuntimeException {
         private static final long serialVersionUID = 1L;
@@ -47,11 +49,11 @@ public class PdfContentStreamAdapter {
             logAndThrow("addRect", e);
         }
     }
-    
+
     public void newPath() {
         // I think PDF-BOX does this automatically.
     }
-    
+
     public void setExtGState(PDExtendedGraphicsState gs) {
         try {
             cs.setGraphicsStateParameters(gs);
@@ -282,14 +284,28 @@ public class PdfContentStreamAdapter {
 
     public void setMiterLimit(float miterLimit) {
         // TODO Not currently supported by PDF-BOX.
+		// TODO: Use official API when the next version is released. See PDFBOX-3669
+        try {
+            cs.appendRawCommands(miterLimit + " M ");
+        } catch (IOException e) {
+            logAndThrow("drawImage", e);
+        }
     }
 
     public void setTextSpacing(float nonSpaceAdjust) {
-        // TODO Not currently supported in PDF-BOX.
+        try {
+            cs.appendRawCommands(String.format(Locale.US, "%.4f Tc\n", nonSpaceAdjust));
+        } catch (IOException e) {
+            logAndThrow("setSpaceSpacing", e);
+        }
     }
 
     public void setSpaceSpacing(float spaceAdjust) {
-        // TODO Not currently supported in PDF-BOX.
+        try {
+            cs.appendRawCommands(String.format(Locale.US, "%.4f Tw\n", spaceAdjust));
+        } catch (IOException e) {
+            logAndThrow("setSpaceSpacing", e);
+        }
     }
 
     public void setPdfMatrix(AffineTransform transform) {
@@ -297,6 +313,17 @@ public class PdfContentStreamAdapter {
            cs.transform(new Matrix(transform));
         } catch (IOException e) {
             logAndThrow("setPdfMatrix", e);
+        }
+    }
+
+    public void placeXForm(float x, float y, PDFormXObject xFormObject) {
+        try {
+			cs.saveGraphicsState();
+			cs.transform(new Matrix(AffineTransform.getTranslateInstance(x, y)));
+			cs.drawForm(xFormObject);
+			cs.restoreGraphicsState();
+        } catch (IOException e) {
+            logAndThrow("placeXForm", e);
         }
     }
 }

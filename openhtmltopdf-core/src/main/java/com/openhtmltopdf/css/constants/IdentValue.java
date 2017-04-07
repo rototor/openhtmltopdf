@@ -160,6 +160,7 @@ public class IdentValue implements FSDerivedValue {
     public final static IdentValue REPEAT_Y = addValue("repeat-y");
     public final static IdentValue RIDGE = addValue("ridge");
     public final static IdentValue RIGHT = addValue("right");
+    public final static IdentValue RTL = addValue("rtl");
     public final static IdentValue RUN_IN = addValue("run-in");
     public final static IdentValue SCROLL = addValue("scroll");
     public final static IdentValue SEPARATE = addValue("separate");
@@ -225,12 +226,27 @@ public class IdentValue implements FSDerivedValue {
 	public static final IdentValue STAR = addValue("star");
 	public static final IdentValue CHECK = addValue("check");
 	public static final IdentValue CROSS = addValue("cross");
-	
+
+	/*
+	 * CSS 3 Transform Values
+	 */
+    public static final IdentValue MATRIX = addValue("matrix");
+    public static final IdentValue TRANSLATE = addValue("translate");
+    public static final IdentValue TRANSLATE_X = addValue("translateX");
+    public static final IdentValue TRANSLATE_Y = addValue("translateY");
+    public static final IdentValue SCALE = addValue("scale");
+    public static final IdentValue SCALE_X = addValue("scaleX");
+    public static final IdentValue SCALE_Y = addValue("scaleY");
+    public static final IdentValue ROTATE = addValue("rotate");
+    public static final IdentValue SKEW = addValue("skew");
+    public static final IdentValue SKEW_X = addValue("skewX");
+    public static final IdentValue SKEW_Y = addValue("skewY");
+
 
     /**
      * Description of the Field
      */
-    private static Map ALL_IDENT_VALUES;
+    private static Map<String, IdentValue> ALL_IDENT_VALUES;
 
     /**
      * Constructor for the IdentValue object
@@ -292,7 +308,7 @@ public class IdentValue implements FSDerivedValue {
      */
     private final static synchronized IdentValue addValue(String ident) {
         if (ALL_IDENT_VALUES == null) {
-            ALL_IDENT_VALUES = new HashMap();
+            ALL_IDENT_VALUES = new HashMap<String, IdentValue>();
         }
         IdentValue val = new IdentValue(ident);
         ALL_IDENT_VALUES.put(ident, val);

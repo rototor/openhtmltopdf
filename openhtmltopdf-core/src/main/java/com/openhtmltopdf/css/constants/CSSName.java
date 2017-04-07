@@ -527,8 +527,8 @@ public final class CSSName implements Comparable {
                     PRIMITIVE,
                     "ltr",
                     INHERITS,
-                    false,
-                    null
+                    true,
+                    new PrimitivePropertyBuilders.Direction()
             );
 
     /**
@@ -1119,6 +1119,38 @@ public final class CSSName implements Comparable {
             );
 
     /**
+     * Unique CSSName instance for CSS3 property.
+     */
+    public final static CSSName TRANSFORM =
+            addProperty(
+                    "transform",
+                    PRIMITIVE,
+                    "none",
+                    NOT_INHERITED,
+                    new PrimitivePropertyBuilders.TransformPropertyBuilder()
+            );
+    
+    public final static CSSName FS_TRANSFORM_ORIGIN_X = 
+    		addProperty(
+    				"-fs-transform-origin-x",
+    				PRIMITIVE,
+    				"50%",
+    				NOT_INHERITED,
+    				new PrimitivePropertyBuilders.TransformOriginX()
+    		);
+
+    public final static CSSName FS_TRANSFORM_ORIGIN_Y = 
+    		addProperty(
+    				"-fs-transform-origin-y",
+    				PRIMITIVE,
+    				"50%",
+    				NOT_INHERITED,
+    				new PrimitivePropertyBuilders.TransformOriginY()
+    		);
+
+    
+    
+    /**
      * Unique CSSName instance for CSS2 property.
      */
     public final static CSSName WORD_SPACING =
@@ -1623,6 +1655,18 @@ public final class CSSName implements Comparable {
                     NOT_INHERITED,
                     new SizePropertyBuilder()
             );
+    
+    /**
+     * Unique CSSName instance for CSS3 property.
+     */
+    public final static CSSName TRANSFORM_ORIGIN_SHORTHAND =
+            addProperty(
+                    "transform-origin",
+                    SHORTHAND,
+                    "50% 50%",
+                    NOT_INHERITED,
+                    new PrimitivePropertyBuilders.TransformOriginPropertyBuilder()
+            );
 
     public final static CSSSideProperties MARGIN_SIDE_PROPERTIES =
             new CSSSideProperties(
@@ -1658,7 +1702,6 @@ public final class CSSName implements Comparable {
                     CSSName.BORDER_RIGHT_COLOR,
                     CSSName.BORDER_BOTTOM_COLOR,
                     CSSName.BORDER_LEFT_COLOR);
-
 
     /**
      * Constructor for the CSSName object

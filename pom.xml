@@ -5,7 +5,7 @@
 
   <groupId>com.openhtmltopdf</groupId>
   <artifactId>openhtmltopdf-parent</artifactId>
-  <version>0.0.1-RC5-rototor1</version>
+  <version>0.0.1-RC10-SNAPSHOT</version>
 
   <packaging>pom</packaging>
 
@@ -30,6 +30,7 @@
     <module>openhtmltopdf-rtl-support</module>
     <module>openhtmltopdf-jsoup-dom-converter</module>
     <module>openhtmltopdf-svg-support</module>
+    <module>openhtmltopdf-java2d</module>
   </modules>
 
   <scm>
@@ -41,13 +42,9 @@
 
   <distributionManagement>
     <repository>
-      <id>repo-deploy</id>
-      <url>http://ems:emsems@10.50.3.5:8081/artifactory/ext-release-local</url>
+      <id>bintray</id>
+      <url>https://api.bintray.com/maven/danfickle/maven/com.openhtmltopdf:openhtmltopdf-parent</url>
     </repository>
-    <snapshotRepository>
-      <id>repo-deploy-snapshot</id>
-      <url>http://ems:emsems@10.50.3.5:8081/artifactory/ext-snapshot-local</url>
-    </snapshotRepository>
   </distributionManagement>
 
   <developers>

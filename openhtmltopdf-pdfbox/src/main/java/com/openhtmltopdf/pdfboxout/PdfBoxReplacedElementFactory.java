@@ -19,28 +19,26 @@
  */
 package com.openhtmltopdf.pdfboxout;
 
-import org.w3c.dom.Element;
-
-import com.openhtmltopdf.extend.FSImage;
-import com.openhtmltopdf.extend.ReplacedElement;
-import com.openhtmltopdf.extend.ReplacedElementFactory;
-import com.openhtmltopdf.extend.SVGDrawer;
-import com.openhtmltopdf.extend.UserAgentCallback;
+import com.openhtmltopdf.css.constants.CSSName;
+import com.openhtmltopdf.extend.*;
 import com.openhtmltopdf.layout.LayoutContext;
 import com.openhtmltopdf.render.BlockBox;
 import com.openhtmltopdf.simple.extend.FormSubmissionListener;
+import org.w3c.dom.Element;
 
 public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
     private final PdfBoxOutputDevice _outputDevice;
     private final SVGDrawer _svgImpl;
+    private final FSObjectDrawerFactory _objectDrawerFactory;
 
-    public PdfBoxReplacedElementFactory(PdfBoxOutputDevice outputDevice, SVGDrawer svgImpl) {
+    public PdfBoxReplacedElementFactory(PdfBoxOutputDevice outputDevice, SVGDrawer svgImpl, FSObjectDrawerFactory objectDrawerFactory) {
         _outputDevice = outputDevice;
         _svgImpl = svgImpl;
+        _objectDrawerFactory = objectDrawerFactory;
     }
 
     public ReplacedElement createReplacedElement(LayoutContext c, BlockBox box,
-            UserAgentCallback uac, int cssWidth, int cssHeight) {
+                                                 UserAgentCallback uac, int cssWidth, int cssHeight) {
         Element e = box.getElement();
         if (e == null) {
             return null;
@@ -48,17 +46,43 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
 
         String nodeName = e.getNodeName();
 
-        if (nodeName.equals("svg") &&
-            _svgImpl != null) {
+        if (nodeName.equals("svg") && _svgImpl != null) {
             return new PdfBoxSVGReplacedElement(e, _svgImpl, cssWidth, cssHeight, c.getSharedContext().getDotsPerPixel());
-        }
-        else if (nodeName.equals("img")) {
+        } else if (nodeName.equals("img")) {
             String srcAttr = e.getAttribute("src");
             if (srcAttr != null && srcAttr.length() > 0) {
                 FSImage fsImage = uac.getImageResource(srcAttr).getImage();
                 if (fsImage != null) {
-                    if (cssWidth != -1 || cssHeight != -1) {
-                        fsImage.scale(cssWidth, cssHeight);
+                    boolean hasMaxHeight = !box.getStyle().isMaxHeightNone();
+                    boolean hasMaxWidth = !box.getStyle().isMaxWidthNone();
+                    boolean hasMaxProperty = hasMaxWidth || hasMaxHeight;
+                    if (cssWidth == -1 && cssHeight == -1) {
+                        if (hasMaxProperty) {
+                            long maxWidth = box.getStyle().asLength(c, CSSName.MAX_WIDTH).value();
+                            long maxHeight = box.getStyle().asLength(c, CSSName.MAX_HEIGHT).value();
+                            int intrinsicHeight = fsImage.getHeight();
+                            int intrinsicWidth = fsImage.getWidth();
+
+                            if (intrinsicHeight > maxHeight && intrinsicHeight >= intrinsicWidth && hasMaxHeight) {
+                                fsImage.scale(-1, (int) maxHeight);
+                            } else if (intrinsicWidth > maxWidth && hasMaxWidth) {
+                                fsImage.scale((int) maxWidth, -1);
+                            }
+                        }
+                    } else {
+                        if (hasMaxProperty) {
+                            long maxWidth = box.getStyle().asLength(c, CSSName.MAX_WIDTH).value();
+                            long maxHeight = box.getStyle().asLength(c, CSSName.MAX_HEIGHT).value();
+                            if (cssHeight > maxHeight && cssHeight >= cssWidth) {
+                                fsImage.scale(-1, (int) maxHeight);
+                            } else if (cssWidth > maxWidth) {
+                                fsImage.scale((int) maxWidth, -1);
+                            } else {
+                                fsImage.scale(cssWidth, cssHeight);
+                            }
+                        } else {
+                            fsImage.scale(cssWidth, cssHeight);
+                        }
                     }
                     return new PdfBoxImageElement(fsImage);
                 }
@@ -96,6 +120,11 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
                 result.setAnchorName(name);
             }
             return result;
+        } else if (nodeName.equals("object") && _objectDrawerFactory != null) {
+			FSObjectDrawer drawer = _objectDrawerFactory.createDrawer(e);
+			if (drawer != null)
+				return new PdfBoxObjectDrawerReplacedElement(e, drawer, cssWidth, cssHeight,
+						c.getSharedContext().getDotsPerPixel());
         }
 
         return null;
