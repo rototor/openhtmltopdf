@@ -2,15 +2,15 @@ package com.openhtmltopdf.testcases;
 
 import com.openhtmltopdf.bidi.support.ICUBidiReorderer;
 import com.openhtmltopdf.bidi.support.ICUBidiSplitter;
-import com.openhtmltopdf.extend.FSObjectDrawer;
-import com.openhtmltopdf.extend.OutputDevice;
-import com.openhtmltopdf.extend.OutputDeviceGraphicsDrawer;
 import com.openhtmltopdf.java2d.api.BufferedImagePageProcessor;
 import com.openhtmltopdf.java2d.api.DefaultPageProcessor;
 import com.openhtmltopdf.java2d.api.FSPageOutputStreamSupplier;
 import com.openhtmltopdf.java2d.api.Java2DRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder.TextDirection;
+import com.openhtmltopdf.extend.FSObjectDrawer;
+import com.openhtmltopdf.extend.OutputDevice;
+import com.openhtmltopdf.extend.OutputDeviceGraphicsDrawer;
 import com.openhtmltopdf.render.DefaultObjectDrawerFactory;
 import com.openhtmltopdf.render.RenderingContext;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
@@ -192,7 +192,6 @@ public class TestcaseRunner {
 				return new FileOutputStream(filename.replace(".png", "_" + zeroBasedPageNumber + ".png"));
 			}
 		}, BufferedImage.TYPE_INT_ARGB, "PNG")).runPaged();
-
 	}
 
 	public static void runTestCase(String testCaseFile) throws Exception {
