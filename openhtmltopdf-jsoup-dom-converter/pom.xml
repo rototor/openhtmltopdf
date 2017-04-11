@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.openhtmltopdf</groupId>
     <artifactId>openhtmltopdf-parent</artifactId>
-    <version>0.0.1-RC10-rototor1</version>
+    <version>0.0.1-RC11-rototor2</version>
   </parent>
 
   <artifactId>openhtmltopdf-jsoup-dom-converter</artifactId>
