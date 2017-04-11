@@ -2,15 +2,15 @@ package com.openhtmltopdf.testcases;
 
 import com.openhtmltopdf.bidi.support.ICUBidiReorderer;
 import com.openhtmltopdf.bidi.support.ICUBidiSplitter;
-import com.openhtmltopdf.extend.FSObjectDrawer;
-import com.openhtmltopdf.extend.OutputDevice;
-import com.openhtmltopdf.extend.OutputDeviceGraphicsDrawer;
 import com.openhtmltopdf.java2d.api.BufferedImagePageProcessor;
 import com.openhtmltopdf.java2d.api.DefaultPageProcessor;
 import com.openhtmltopdf.java2d.api.FSPageOutputStreamSupplier;
 import com.openhtmltopdf.java2d.api.Java2DRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder.TextDirection;
+import com.openhtmltopdf.extend.FSObjectDrawer;
+import com.openhtmltopdf.extend.OutputDevice;
+import com.openhtmltopdf.extend.OutputDeviceGraphicsDrawer;
 import com.openhtmltopdf.render.DefaultObjectDrawerFactory;
 import com.openhtmltopdf.render.RenderingContext;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
@@ -152,10 +152,7 @@ public class TestcaseRunner {
 			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 			builder.defaultTextDirection(TextDirection.LTR);
 			builder.useSVGDrawer(new BatikSVGDrawer());
-
-			DefaultObjectDrawerFactory objectDrawerFactory = new DefaultObjectDrawerFactory();
-			objectDrawerFactory.registerDrawer("custom/binary-tree", new SampleObjectDrawerBinaryTree());
-			builder.useObjectDrawerFactory(objectDrawerFactory);
+			builder.useObjectDrawerFactory(buildObjectDrawerFactory());
 
 			builder.withHtmlContent(html, TestcaseRunner.class.getResource("/testcases/").toString());
 			builder.toStream(outputStream);
@@ -165,9 +162,16 @@ public class TestcaseRunner {
 		}
 	}
 
+	private static DefaultObjectDrawerFactory buildObjectDrawerFactory() {
+		DefaultObjectDrawerFactory objectDrawerFactory = new DefaultObjectDrawerFactory();
+		objectDrawerFactory.registerDrawer("custom/binary-tree", new SampleObjectDrawerBinaryTree());
+		return objectDrawerFactory;
+	}
+
 	private static void renderPNG(String html, final String filename) throws Exception {
 		Java2DRendererBuilder builder = new Java2DRendererBuilder();
 		builder.useSVGDrawer(new BatikSVGDrawer());
+		builder.useObjectDrawerFactory(buildObjectDrawerFactory());
 		builder.withHtmlContent(html, TestcaseRunner.class.getResource("/testcases/").toString());
 		BufferedImagePageProcessor bufferedImagePageProcessor = new BufferedImagePageProcessor(
 				BufferedImage.TYPE_INT_RGB, 2.0);
@@ -192,7 +196,6 @@ public class TestcaseRunner {
 				return new FileOutputStream(filename.replace(".png", "_" + zeroBasedPageNumber + ".png"));
 			}
 		}, BufferedImage.TYPE_INT_ARGB, "PNG")).runPaged();
-
 	}
 
 	public static void runTestCase(String testCaseFile) throws Exception {
