@@ -283,10 +283,8 @@ public class PdfContentStreamAdapter {
     }
 
     public void setMiterLimit(float miterLimit) {
-        // TODO Not currently supported by PDF-BOX.
-		// TODO: Use official API when the next version is released. See PDFBOX-3669
         try {
-            cs.appendRawCommands(miterLimit + " M ");
+            cs.setMiterLimit(miterLimit);
         } catch (IOException e) {
             logAndThrow("drawImage", e);
         }
