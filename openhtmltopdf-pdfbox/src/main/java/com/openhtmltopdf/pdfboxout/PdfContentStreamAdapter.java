@@ -284,9 +284,14 @@ public class PdfContentStreamAdapter {
 
     public void setMiterLimit(float miterLimit) {
         try {
-            cs.setMiterLimit(miterLimit);
+            /*
+             * Only set the miter limit if it is > 0, as 0 is a invalid
+             * value which causes Acrobat Reader to stop drawing anything.
+             */
+        	if( miterLimit > 0.0)
+                cs.setMiterLimit(miterLimit);
         } catch (IOException e) {
-            logAndThrow("drawImage", e);
+            logAndThrow("setMiterLimit", e);
         }
     }
 
