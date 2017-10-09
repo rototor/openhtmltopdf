@@ -1,14 +1,5 @@
 package com.openhtmltopdf.documentation.generator;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.util.Arrays;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.pdfbox.io.IOUtils;
-import org.apache.pdfbox.util.Charsets;
-
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
 import com.vladsch.flexmark.ast.Node;
@@ -17,6 +8,14 @@ import com.vladsch.flexmark.ext.toc.TocExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.options.MutableDataSet;
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.util.Charsets;
+
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+
+//import org.apache.commons.io.FileUtils;
 
 public class TemplateAuthorGuideGenerator {
 	public static void main(String[] args) throws Exception {
