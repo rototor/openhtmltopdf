@@ -12,7 +12,9 @@ GETTING STARTED
 ========
 + [Showcase Document - PDF](https://openhtmltopdf.com/showcase.pdf)
 + [Integration guide](docs/integration-guide.md) - get maven artifacts and code to get started.
-+ [RC7 Online Sandbox](https://sandbox.openhtmltopdf.com/) - Please do not abuse.
++ [Template Author Guide - PDF - WIP](https://openhtmltopdf.com/template-guide.pdf)
++ [RC11 Online Sandbox](https://sandbox.openhtmltopdf.com/) - Please do not abuse.
++ [Sample Project - Pretty Resume Generator](https://github.com/danfickle/pretty-resume)
 
 LICENSE
 ========
@@ -35,7 +37,7 @@ FAQ
 ===
 + OPEN HTML TO PDF is tested with OpenJDK 7 and Oracle JDK 8.
 + No, you can not use it on Android or Google App Engine.
-+ Flowing columns are not implemented.
++ <s>Flowing columns are not implemented.</s> Implemented in RC12.
 + No, it's not a web browser.
 
 TEST CASES
@@ -48,8 +50,20 @@ from ````/openhtmltopdf-examples/src/main/java/com/openhtmltopdf/testcases/Testc
 CHANGELOG
 ========
 
-head - 0.0.1-RC11-SNAPSHOT
+head - 0.0.1-RC12-SNAPSHOT
 ========
++ [Allow uri resolver to resolve uri before checking if a data uri](https://github.com/danfickle/openhtmltopdf/pull/132) Thanks @AlbanSeurat
++ [Ability to run examples from maven](https://github.com/danfickle/openhtmltopdf/pull/108) Thanks @jartysiewicz
++ [Fix to allow jar scheme urls](https://github.com/danfickle/openhtmltopdf/issues/125) Thanks @geesen
++ [Font mapping in custom object drawer rather than using vector shapes](https://github.com/danfickle/openhtmltopdf/pull/121) Thanks @rototor
++ [Upgraded PDFBOX to 2.0.7, ICU4J to 59.1 and PDFBOX-GRAPHICS2D to 0.7](https://github.com/danfickle/openhtmltopdf/pull/121) Thanks @rototor
++ [Implemented CSS3 flowing text columns](https://github.com/danfickle/openhtmltopdf/issues/60#issuecomment-310959602) Thanks @miminno
+
+0.0.1-RC11
+========
++ [Allow collapsed borders with table pagination](https://github.com/danfickle/openhtmltopdf/issues/97) Thanks @Epimetheus89 
++ [FIX: Dispose of thread local when renderer is cleaned up](https://github.com/danfickle/openhtmltopdf/issues/94) Thanks @rototor
++ [FIX: Link handling when identical link positions on multiple pages](https://github.com/danfickle/openhtmltopdf/pull/95) Thanks @rototor
 + [FIX: Allow user to disable logging](https://github.com/danfickle/openhtmltopdf/pull/90) Thanks @GrammyTraore
 + [Handle TrueType font collections added in builder](https://github.com/danfickle/openhtmltopdf/pull/89) Thanks @rototor
 + [Implement custom object drawer for Java2D output](https://github.com/danfickle/openhtmltopdf/pull/87) Thanks @rototor
