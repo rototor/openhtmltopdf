@@ -24,9 +24,13 @@
   </licenses>
   <distributionManagement>
     <repository>
-      <id>bintray</id>
-      <url>https://api.bintray.com/maven/danfickle/maven/com.openhtmltopdf:openhtmltopdf-parent</url>
+      <id>repo-deploy</id>
+      <url>http://ems:emsems@10.50.3.5:8081/artifactory/ext-release-local</url>
     </repository>
+    <snapshotRepository>
+      <id>repo-deploy-snapshot</id>
+      <url>http://ems:emsems@10.50.3.5:8081/artifactory/ext-snapshot-local</url>
+    </snapshotRepository>
   </distributionManagement>
   <dependencies>
     <dependency>
