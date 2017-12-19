@@ -56,8 +56,14 @@ from ````/openhtmltopdf-examples/src/main/java/com/openhtmltopdf/testcases/Testc
 CHANGELOG
 ========
 
-head - 0.0.1-RC12-SNAPSHOT
+head - 0.0.1-RC13-SNAPSHOT
 ========
++ [Fix for XML loading problems with JBoss,Wildfly](https://github.com/danfickle/openhtmltopdf/issues/54) Thanks @estevandiedrich, @alanhay
+
+0.0.1-RC12
+========
++ [Upgrade the PDFBox to 2.0.8 and PDFBox-Graphics2D to 0.10 versions again](https://github.com/danfickle/openhtmltopdf/pull/150) Thanks @rototor
++ [Fix incorrect strikethrough offset](https://github.com/danfickle/openhtmltopdf/issues/136) Thanks @alebar, @backslash47, @izhenka
 + Allow percentages for max-width and max-height of images Thanks @backslash47
 + [Better sizing system for inline SVG images](https://github.com/danfickle/openhtmltopdf/issues/128) Thanks @harbulot
 + [Allow uri resolver to resolve uri before checking if a data uri](https://github.com/danfickle/openhtmltopdf/pull/132) Thanks @AlbanSeurat

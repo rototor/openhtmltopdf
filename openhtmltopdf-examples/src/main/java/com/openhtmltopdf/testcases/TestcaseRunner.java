@@ -56,6 +56,7 @@ public class TestcaseRunner {
 		runTestCase("FSPageBreakMinHeightSample");
 
 		runTestCase("color");
+		runTestCase("text-decoration");
 		runTestCase("background-color");
 		runTestCase("background-image");
 		runTestCase("invalid-url-background-image");
@@ -88,6 +89,11 @@ public class TestcaseRunner {
 		 * Adobe Borderyle Problem
 		 */
 		runTestCase("adobe-borderstyle-bugs");
+
+		/*
+		 * CSS Transform Test
+		 */
+		runTestCase("transform");
 
 		/* Add additional test cases here. */
 	}
