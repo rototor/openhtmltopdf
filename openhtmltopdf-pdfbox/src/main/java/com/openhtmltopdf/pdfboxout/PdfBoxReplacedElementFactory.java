@@ -20,10 +20,12 @@
 package com.openhtmltopdf.pdfboxout;
 
 import com.openhtmltopdf.css.constants.CSSName;
+import com.openhtmltopdf.css.style.CalculatedStyle;
 import com.openhtmltopdf.extend.*;
 import com.openhtmltopdf.layout.LayoutContext;
 import com.openhtmltopdf.render.BlockBox;
 import com.openhtmltopdf.simple.extend.FormSubmissionListener;
+
 import org.w3c.dom.Element;
 
 public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
@@ -47,7 +49,10 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
         String nodeName = e.getNodeName();
 
         if (nodeName.equals("svg") && _svgImpl != null) {
-            return new PdfBoxSVGReplacedElement(e, _svgImpl, cssWidth, cssHeight, c.getSharedContext().getDotsPerPixel());
+            int cssMaxWidth = CalculatedStyle.getCSSMaxWidth(c, box);
+            int cssMaxHeight = CalculatedStyle.getCSSMaxHeight(c, box);
+            
+            return new PdfBoxSVGReplacedElement(e, _svgImpl, cssWidth, cssHeight, cssMaxWidth, cssMaxHeight, c.getSharedContext().getDotsPerPixel());
         } else if (nodeName.equals("img")) {
             String srcAttr = e.getAttribute("src");
             if (srcAttr != null && srcAttr.length() > 0) {
@@ -58,8 +63,8 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
                     boolean hasMaxProperty = hasMaxWidth || hasMaxHeight;
                     if (cssWidth == -1 && cssHeight == -1) {
                         if (hasMaxProperty) {
-                            long maxWidth = box.getStyle().asLength(c, CSSName.MAX_WIDTH).value();
-                            long maxHeight = box.getStyle().asLength(c, CSSName.MAX_HEIGHT).value();
+                            long maxWidth = CalculatedStyle.getCSSMaxWidth(c, box);
+                            long maxHeight = CalculatedStyle.getCSSMaxHeight(c, box);
                             int intrinsicHeight = fsImage.getHeight();
                             int intrinsicWidth = fsImage.getWidth();
 

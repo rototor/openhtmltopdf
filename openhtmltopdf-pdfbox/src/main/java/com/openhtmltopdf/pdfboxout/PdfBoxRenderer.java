@@ -67,7 +67,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.regex.Pattern;
 
-public class PdfBoxRenderer {
+public class PdfBoxRenderer implements Closeable {
     // See discussion of units at top of PdfBoxOutputDevice.
     private static final float DEFAULT_DOTS_PER_POINT = 20f * 4f / 3f;
     private static final int DEFAULT_DOTS_PER_PIXEL = 20;
@@ -85,6 +85,8 @@ public class PdfBoxRenderer {
     
     private PDEncryption _pdfEncryption;
 
+    private String _producer;
+
     // Usually 1.7
     private float _pdfVersion;
     
@@ -100,79 +102,19 @@ public class PdfBoxRenderer {
     private BidiReorderer _reorderer;
 
     /**
-     * @param testMode
-     * @deprecated Please use the builder.
-     */
-    @Deprecated
-    public PdfBoxRenderer(boolean testMode) {
-        this(DEFAULT_DOTS_PER_POINT, DEFAULT_DOTS_PER_PIXEL, true, testMode, null, null, null, null);
-    }
-
-    /**
-     * @deprecated Please use the builder.
-     * @param dotsPerPoint
-     * @param dotsPerPixel
-     * @param useSubsets
-     * @param testMode
-     * @param factory
-     * @param _resolver
-     * @param _cache
-     * @param svgImpl
-     */
-    @Deprecated
-    public PdfBoxRenderer(float dotsPerPoint, int dotsPerPixel, boolean useSubsets, boolean testMode, HttpStreamFactory factory, FSUriResolver _resolver, FSCache _cache, SVGDrawer svgImpl) {
-        _pdfDoc = new PDDocument();
-        _svgImpl = svgImpl;
-        _dotsPerPoint = dotsPerPoint;
-        _testMode = testMode;
-        _outputDevice = new PdfBoxOutputDevice(dotsPerPoint, testMode);
-        _outputDevice.setWriter(_pdfDoc);
-        
-        PdfBoxUserAgent userAgent = new PdfBoxUserAgent(_outputDevice);
-
-        if (factory != null) {
-            userAgent.setHttpStreamFactory(factory);
-        }
-        
-        if (_resolver != null) {
-            userAgent.setUriResolver(_resolver);
-        }
-        
-        if (_cache != null) {
-            userAgent.setExternalCache(_cache);
-        }
-        
-        _sharedContext = new SharedContext();
-        _sharedContext.registerWithThread();
-        
-        _sharedContext.setUserAgentCallback(userAgent);
-        _sharedContext.setCss(new StyleReference(userAgent));
-        userAgent.setSharedContext(_sharedContext);
-        _outputDevice.setSharedContext(_sharedContext);
-
-        PdfBoxFontResolver fontResolver = new PdfBoxFontResolver(_sharedContext, _pdfDoc);
-        _sharedContext.setFontResolver(fontResolver);
-
-        PdfBoxReplacedElementFactory replacedElementFactory = new PdfBoxReplacedElementFactory(_outputDevice, svgImpl, null);
-        _sharedContext.setReplacedElementFactory(replacedElementFactory);
-
-        _sharedContext.setTextRenderer(new PdfBoxTextRenderer());
-        _sharedContext.setDPI(DEFAULT_PDF_POINTS_PER_INCH * _dotsPerPoint);
-        _sharedContext.setDotsPerPixel(dotsPerPixel);
-        _sharedContext.setPrint(true);
-        _sharedContext.setInteractive(false);
-    }
-
-    /**
      * This method is constantly changing as options are added to the builder.
      */
     PdfBoxRenderer(BaseDocument doc, UnicodeImplementation unicode, 
             HttpStreamFactory httpStreamFactory, 
             OutputStream os, FSUriResolver resolver, FSCache cache, SVGDrawer svgImpl,
-            PageDimensions pageSize, float pdfVersion, String replacementText, boolean testMode, FSObjectDrawerFactory objectDrawerFactory) {
+            PageDimensions pageSize, float pdfVersion, String replacementText, boolean testMode,
+            FSObjectDrawerFactory objectDrawerFactory, String preferredTransformerFactoryImplementationClass,
+            String producer) {
         
         _pdfDoc = new PDDocument();
         _pdfDoc.setVersion(pdfVersion);
+
+        _producer = producer;
 
         _svgImpl = svgImpl;
         _dotsPerPoint = DEFAULT_DOTS_PER_POINT;
@@ -196,6 +138,8 @@ public class PdfBoxRenderer {
         
         _sharedContext = new SharedContext();
         _sharedContext.registerWithThread();
+        
+        _sharedContext._preferredTransformerFactoryImplementationClass = preferredTransformerFactoryImplementationClass;
         
         _sharedContext.setUserAgentCallback(userAgent);
         _sharedContext.setCss(new StyleReference(userAgent));
@@ -276,39 +220,11 @@ public class PdfBoxRenderer {
         return _doc;
     }
     
+    /**
+     * Returns the PDDocument or null if it has been closed.
+     */
     public PDDocument getPdfDocument() {
         return _pdfDoc;
-    }
-    
-    /**
-     * @deprecated Use builder instead.
-     * @param splitterFactory
-     */
-    @Deprecated
-    public void setBidiSplitter(BidiSplitterFactory splitterFactory) {
-        this._splitterFactory = splitterFactory;
-    }
-    
-    /**
-     * @deprecated Use builder instead.
-     * @param reorderer
-     */
-    @Deprecated
-    public void setBidiReorderer(BidiReorderer reorderer) {
-        this._reorderer = reorderer;
-        this._outputDevice.setBidiReorderer(reorderer);
-    }
-    
-    /**
-     * @deprecated Use builder instead.
-     * @param rtl
-     */
-    @Deprecated
-    public void setDefaultTextDirection(boolean rtl) {
-        if (rtl)
-            _defaultTextDirection = BidiSplitter.RTL;
-        else
-            _defaultTextDirection = BidiSplitter.LTR;
     }
     
     /**
@@ -321,14 +237,6 @@ public class PdfBoxRenderer {
 
     private Document loadDocument(String uri) {
         return _sharedContext.getUserAgentCallback().getXMLResource(uri).getDocument();
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocument(String uri) {
-        setDocumentP(loadDocument(uri), uri);
     }
 
     private void setDocumentP(String uri) {
@@ -371,56 +279,6 @@ public class PdfBoxRenderer {
         }
     }
     
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocument(Document doc, String url) {
-        setDocumentP(doc, url);
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocument(File file) throws IOException {
-        setDocumentP(file);
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocumentFromString(String content) {
-        setDocumentFromStringP(content, null);
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocumentFromString(String content, String baseUrl) {
-        setDocumentFromStringP(content, baseUrl);
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     */
-    @Deprecated
-    public void setDocument(Document doc, String url, NamespaceHandler nsh) {
-        setDocumentP(doc, url, nsh);
-    }
-
-    /**
-     * @deprecated Use builder instead.
-     * @param v
-     */
-    @Deprecated
-    public void setPDFVersion(float v) {
-        _pdfDoc.setVersion(v);
-        _pdfVersion = v;
-    }
-
     public float getPDFVersion() {
         return _pdfVersion == 0f ? 1.7f : _pdfVersion;
     }
@@ -477,18 +335,45 @@ public class PdfBoxRenderer {
         return result;
     }
 
+    /**
+     *  Creates a PDF with setup specified by builder. On finsihing or failing, saves (if successful) and closes the PDF document.
+     */
     public void createPDF() throws IOException {
         createPDF(_os);
     }
+
+    /**
+     *  Creates a PDF with setup specified by builder. On finsihing or failing, DOES NOT save or close the PDF document.
+     *  Useful for post-processing the PDDocument which can be retrieved by getPdfDocument().
+     */
+    public void createPDFWithoutClosing() throws IOException {
+        createPDF(_os, false, 0);
+    }
     
+    /**
+     * @deprecated Use builder to set output stream.
+     * @param os
+     * @throws IOException
+     */
+    @Deprecated
     public void createPDF(OutputStream os) throws IOException {
         createPDF(os, true, 0);
     }
 
+    /**
+     * @deprecated Doubt this still works as untested.
+     * @throws IOException
+     */
+    @Deprecated 
     public void writeNextDocument() throws IOException {
         writeNextDocument(0);
     }
 
+    /**
+     * @deprecated Doubt this still works as untested.
+     * @throws IOException
+     */
+    @Deprecated 
     public void writeNextDocument(int initialPageNo) throws IOException {
         List<PageBox> pages = _root.getLayer().getPages();
 
@@ -505,6 +390,11 @@ public class PdfBoxRenderer {
         writePDF(pages, c, firstPageSize, _pdfDoc);
     }
 
+    /**
+     * @deprecated
+     * @throws IOException
+     */
+    @Deprecated 
     public void finishPDF() throws IOException {
         if (_pdfDoc != null) {
             fireOnClose();
@@ -512,43 +402,63 @@ public class PdfBoxRenderer {
         }
     }
 
+    /**
+     * @deprecated Use builder to set output stream.
+     * @throws IOException
+     */
+    @Deprecated 
     public void createPDF(OutputStream os, boolean finish) throws IOException {
         createPDF(os, finish, 0);
     }
 
     /**
-     * <B>NOTE:</B> Caller is responsible for cleaning up the OutputStream if
-     * something goes wrong.
+     * @deprecated Use builder to set output stream.
+     * <B>NOTE:</B> Caller is responsible for cleaning up the OutputStream.
      * 
      * @throws IOException
      */
+    @Deprecated
     public void createPDF(OutputStream os, boolean finish, int initialPageNo) throws IOException {
-        List<PageBox> pages = _root.getLayer().getPages();
-
-        RenderingContext c = newRenderingContext();
-        c.setInitialPageNo(initialPageNo);
+        boolean success = false;
         
-        PageBox firstPage = pages.get(0);
-        Rectangle2D firstPageSize = new Rectangle2D.Float(0, 0,
-                firstPage.getWidth(c) / _dotsPerPoint,
-                firstPage.getHeight(c) / _dotsPerPoint);
+        try {
+            // renders the layout if it wasn't created
+            if (_root == null) {
+                this.layout();
+            }
+            
+            List<PageBox> pages = _root.getLayer().getPages();
 
-        if (_pdfVersion != 0f) {
-            _pdfDoc.setVersion(_pdfVersion);
-        }
+            RenderingContext c = newRenderingContext();
+            c.setInitialPageNo(initialPageNo);
         
-        if (_pdfEncryption != null) {
-            _pdfDoc.setEncryptionDictionary(_pdfEncryption);
-        }
+            PageBox firstPage = pages.get(0);
+            Rectangle2D firstPageSize = new Rectangle2D.Float(0, 0,
+                    firstPage.getWidth(c) / _dotsPerPoint,
+                    firstPage.getHeight(c) / _dotsPerPoint);
 
-        firePreOpen();
+            if (_pdfVersion != 0f) {
+                _pdfDoc.setVersion(_pdfVersion);
+            }
+        
+            if (_pdfEncryption != null) {
+                _pdfDoc.setEncryptionDictionary(_pdfEncryption);
+            }
 
-        writePDF(pages, c, firstPageSize, _pdfDoc);
+            firePreOpen();
 
-        if (finish) {
-            fireOnClose();
-            _pdfDoc.save(os);
-            _pdfDoc.close();
+            writePDF(pages, c, firstPageSize, _pdfDoc);
+            
+            success = true;
+        } finally {
+            if (finish) {
+                fireOnClose();
+                if (success) {
+                    _pdfDoc.save(os);
+                }
+                _pdfDoc.close();
+                _pdfDoc = null;
+            }
         }
     }
 
@@ -612,7 +522,12 @@ public class PdfBoxRenderer {
         PDDocumentInformation info = new PDDocumentInformation();
         
         info.setCreationDate(Calendar.getInstance());
-        info.setProducer("openhtmltopdf.com");
+
+        if (_producer == null) {
+            info.setProducer("openhtmltopdf.com");
+        } else {
+            info.setProducer(_producer);
+        }
 
         for (Metadata metadata : _outputDevice.getMetadata()) {
         	String name = metadata.getName();
@@ -729,6 +644,12 @@ public class PdfBoxRenderer {
         return _sharedContext;
     }
 
+    /**
+     * @deprecated unused and untested.
+     * @param writer
+     * @throws IOException
+     */
+    @Deprecated
     public void exportText(Writer writer) throws IOException {
         RenderingContext c = newRenderingContext();
         c.setPageCount(_root.getLayer().getPages().size());
@@ -770,11 +691,20 @@ public class PdfBoxRenderer {
     }
     
     /**
-     * Cleanup thread resources. MUST be called after finishing with the renderer.
+     * @deprecated Use close instead.
      */
+    @Deprecated
     public void cleanup() {
         _outputDevice.close();
         _sharedContext.removeFromThread();
         ThreadCtx.cleanup();
+    }
+
+    /**
+     * Cleanup thread resources. MUST be called after finishing with the renderer.
+     */
+    @Override
+    public void close() throws IOException {
+        this.cleanup();
     }
 }

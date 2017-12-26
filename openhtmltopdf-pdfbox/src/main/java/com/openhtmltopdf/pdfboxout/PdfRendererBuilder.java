@@ -47,12 +47,14 @@ public class PdfRendererBuilder
     private boolean _isPageSizeInches;
     private float _pdfVersion = 1.7f;
     private String _replacementText;
+    private String _producer;
     private FSTextBreaker _lineBreaker;
     private FSTextBreaker _charBreaker;
     private FSTextTransformer _unicodeToUpperTransformer;
     private FSTextTransformer _unicodeToLowerTransformer;
     private FSTextTransformer _unicodeToTitleTransformer;
     private FSObjectDrawerFactory _objectDrawerFactory;
+    private String _preferredTransformerFactoryImplementationClass = "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl";
     
     private static class AddedFont {
         private final FSSupplier<InputStream> supplier;
@@ -86,7 +88,7 @@ public class PdfRendererBuilder
             renderer.createPDF();
         } finally {
             if (renderer != null)
-                renderer.cleanup();
+                renderer.close();
         }
     }
     
@@ -103,7 +105,11 @@ public class PdfRendererBuilder
         
         BaseDocument doc = new BaseDocument(_baseUri, _html, _document, _file, _uri);
 
-        PdfBoxRenderer renderer = new PdfBoxRenderer(doc, unicode, _httpStreamFactory, _os, _resolver, _cache, _svgImpl, pageSize, _pdfVersion, _replacementText, _testMode, _objectDrawerFactory);
+        PdfBoxRenderer renderer = new PdfBoxRenderer(
+                doc, unicode, _httpStreamFactory, _os, _resolver,
+                _cache, _svgImpl, pageSize, _pdfVersion, _replacementText,
+                _testMode, _objectDrawerFactory, _preferredTransformerFactoryImplementationClass,
+                _producer);
 
         /*
          * Register all Fonts
@@ -431,4 +437,30 @@ public class PdfRendererBuilder
         this._objectDrawerFactory = objectDrawerFactory;
         return this;
     }
+    
+    /**
+     * This method should be considered advanced and is not required for most setups.
+     * Set a preferred implementation class for use as javax.xml.transform.TransformerFactory. Use null to let 
+     * a default implementation class be used. The default is "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl".
+     * This seems to work with most systems but not JBoss Wildfly and related setups. In this case you can use null to let
+     * the container use whatever TransformerFactory it has available. 
+     * @param transformerFactoryClass
+     * @return this for method chaining
+     */
+    public PdfRendererBuilder useTransformerFactoryImplementationClass(String transformerFactoryClass) {
+        this._preferredTransformerFactoryImplementationClass = transformerFactoryClass;
+        return this;
+    }
+
+    /**
+     * Set a producer on the output document
+     *
+     * @param producer the name of the producer to set defaults to openhtmltopdf.com
+     * @return this for method chaining
+     */
+    public PdfRendererBuilder withProducer(String producer) {
+        this._producer = producer;
+        return this;
+    }
+
 }
