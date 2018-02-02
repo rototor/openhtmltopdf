@@ -2,7 +2,11 @@ package com.openhtmltopdf.pdfboxout;
 
 import com.openhtmltopdf.css.style.CalculatedStyle;
 import com.openhtmltopdf.extend.NamespaceHandler;
+import com.openhtmltopdf.extend.ReplacedElement;
 import com.openhtmltopdf.layout.SharedContext;
+import com.openhtmltopdf.pdfboxout.quads.KongAlgo;
+import com.openhtmltopdf.pdfboxout.quads.Triangle;
+import com.openhtmltopdf.render.BlockBox;
 import com.openhtmltopdf.render.Box;
 import com.openhtmltopdf.render.PageBox;
 import com.openhtmltopdf.render.RenderingContext;
@@ -19,210 +23,383 @@ import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPa
 import org.w3c.dom.Element;
 
 import java.awt.*;
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Rectangle2D;
+import java.awt.geom.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+import java.util.Map.Entry;
 
 public class PdfBoxLinkManager {
-    
-    private final Map<PDPage, Set<String>> _linkTargetAreas;
-    private final SharedContext _sharedContext;
-    private final float _dotsPerPoint;
-    private final Box _root;
-    private final PdfBoxOutputDevice _od;
-    private final List _links;
-    
-    public PdfBoxLinkManager(SharedContext ctx, float dotsPerPoint, Box root, PdfBoxOutputDevice od)
-    {
-        this._sharedContext = ctx;
-        this._dotsPerPoint = dotsPerPoint;
-        this._root = root;
-        this._od = od;
-        this._linkTargetAreas = new HashMap<PDPage,Set<String>>();
-        this._links = new ArrayList();
-    }
 
-    private Rectangle2D calcTotalLinkArea(RenderingContext c, Box box, float pageHeight, AffineTransform transform) {
-        Box current = box;
-        while (true) {
-            Box prev = current.getPreviousSibling();
-            if (prev == null || prev.getElement() != box.getElement()) {
-                break;
-            }
+	private final Map<PDPage, Set<String>> _linkTargetAreas;
+	private final SharedContext _sharedContext;
+	private final float _dotsPerPoint;
+	private final Box _root;
+	private final PdfBoxOutputDevice _od;
+	private final List<LinkDetails> _links;
 
-            current = prev;
-        }
+	/**
+	 * All Elements which can have a shaped image map implement this
+	 */
+	public interface IPdfBoxElementWithShapedLinks {
+		Map<Shape, String> getLinkMap();
+	}
 
-        Rectangle2D result = createTargetArea(c, current, pageHeight, transform, _root, _od); 
+	public PdfBoxLinkManager(SharedContext ctx, float dotsPerPoint, Box root, PdfBoxOutputDevice od) {
+		this._sharedContext = ctx;
+		this._dotsPerPoint = dotsPerPoint;
+		this._root = root;
+		this._od = od;
+		this._linkTargetAreas = new HashMap<PDPage, Set<String>>();
+		this._links = new ArrayList<LinkDetails>();
+	}
 
-        current = current.getNextSibling();
-        while (current != null && current.getElement() == box.getElement()) {
-            result = add(result, createTargetArea(c, current, pageHeight, transform, _root, _od));
+	private Rectangle2D calcTotalLinkArea(RenderingContext c, Box box, float pageHeight, AffineTransform transform) {
+		Box current = box;
+		while (true) {
+			Box prev = current.getPreviousSibling();
+			if (prev == null || prev.getElement() != box.getElement()) {
+				break;
+			}
 
-            current = current.getNextSibling();
-        }
+			current = prev;
+		}
 
-        return result;
-    }
+		Rectangle2D result = createTargetArea(c, current, pageHeight, transform, _root, _od);
 
-    private Rectangle2D add(Rectangle2D r1, Rectangle2D r2) {
-        float llx = (float) Math.min(r1.getMinX(), r2.getMinX());
-        float urx = (float) Math.max(r1.getMaxX(), r2.getMaxX());
-        float lly = (float) Math.min(r1.getMaxY(), r2.getMaxY());
-        float ury = (float) Math.max(r1.getMinY(), r2.getMinY());
+		current = current.getNextSibling();
+		while (current != null && current.getElement() == box.getElement()) {
+			result = add(result, createTargetArea(c, current, pageHeight, transform, _root, _od));
 
-        return new Rectangle2D.Float(llx, lly, urx, ury);
-    }
+			current = current.getNextSibling();
+		}
 
-    private String createRectKey(Rectangle2D rect) {
-        return rect.getMinX() + ":" + rect.getMaxY() + ":" + rect.getMaxX() + ":" + rect.getMinY();
-    }
+		return result;
+	}
 
-    private Rectangle2D checkLinkArea(PDPage page, RenderingContext c, Box box, float pageHeight, AffineTransform transform) {
-        Rectangle2D targetArea = calcTotalLinkArea(c, box, pageHeight, transform);
-        String key = createRectKey(targetArea);
-        Set<String> keys = _linkTargetAreas.get(page);
-        if( keys == null ) {
-            keys = new HashSet<String>();
-            _linkTargetAreas.put(page,keys);
-        }
-        if (keys.contains(key)) {
-            return null;
-        }
-        keys.add(key);
-        return targetArea;
-    }
+	private Rectangle2D add(Rectangle2D r1, Rectangle2D r2) {
+		float llx = (float) Math.min(r1.getMinX(), r2.getMinX());
+		float urx = (float) Math.max(r1.getMaxX(), r2.getMaxX());
+		float lly = (float) Math.min(r1.getMaxY(), r2.getMaxY());
+		float ury = (float) Math.max(r1.getMinY(), r2.getMinY());
 
-    public void processLink(RenderingContext c, Box box, PDPage page, float pageHeight, AffineTransform transform) {
-        Element elem = box.getElement();
-        if (elem != null) {
-            NamespaceHandler handler = _sharedContext.getNamespaceHandler();
-            String uri = handler.getLinkUri(elem);
-            if (uri != null) {
-                if (uri.length() > 1 && uri.charAt(0) == '#') {
-                    String anchor = uri.substring(1);
-                    Box target = _sharedContext.getBoxById(anchor);
-                    if (target != null) {
-                        PDPageXYZDestination dest = createDestination(c, target);
+		return new Rectangle2D.Float(llx, lly, urx, ury);
+	}
 
-                        PDAction action;
-                        if (handler.getAttributeValue(elem, "onclick") != null && !"".equals(handler.getAttributeValue(elem, "onclick"))) {
-                            action = new PDActionJavaScript(handler.getAttributeValue(elem, "onclick"));
-                        } else {
-                            PDActionGoTo go = new PDActionGoTo();
-                            go.setDestination(dest);
-                            action = go;
-                        }
+	private String createRectKey(Rectangle2D rect, Shape linkShape, AffineTransform transform) {
+		StringBuilder key = new StringBuilder(
+				rect.getMinX() + ":" + rect.getMaxY() + ":" + rect.getMaxX() + ":" + rect.getMinY());
+		if (linkShape != null) {
+			PathIterator pathIterator = linkShape.getPathIterator(transform);
+			double[] vals = new double[6];
+			while (!pathIterator.isDone()) {
+				int type = pathIterator.currentSegment(vals);
+				switch (type) {
+				case PathIterator.SEG_CUBICTO:
+					key.append("C");
+					key.append(vals[0]).append(":").append(vals[1]).append(":").append(vals[2]).append(":")
+							.append(vals[3]).append(":").append(vals[4]).append(":").append(vals[5]);
+					break;
+				case PathIterator.SEG_LINETO:
+					key.append("L");
+					key.append(vals[0]).append(":").append(vals[1]).append(":");
+					break;
+				case PathIterator.SEG_MOVETO:
+					key.append("M");
+					key.append(vals[0]).append(":").append(vals[1]).append(":");
+					break;
+				case PathIterator.SEG_QUADTO:
+					key.append("Q");
+					key.append(vals[0]).append(":").append(vals[1]).append(":").append(vals[2]).append(":")
+							.append(vals[3]);
+					break;
+				case PathIterator.SEG_CLOSE:
+					key.append("cp");
+					break;
+				default:
+					break;
+				}
+				pathIterator.next();
+			}
+		}
+		return key.toString();
+	}
 
-                        Rectangle2D targetArea = checkLinkArea(page, c, box, pageHeight, transform);
-                        if (targetArea == null) {
-                            return;
-                        }
+	private Rectangle2D checkLinkArea(PDPage page, RenderingContext c, Box box, float pageHeight,
+			AffineTransform transform, Shape linkShape) {
+		Rectangle2D targetArea = calcTotalLinkArea(c, box, pageHeight, transform);
+		String key = createRectKey(targetArea, linkShape, transform);
+		Set<String> keys = _linkTargetAreas.get(page);
+		if (keys == null) {
+			keys = new HashSet<String>();
+			_linkTargetAreas.put(page, keys);
+		}
+		if (keys.contains(key)) {
+			return null;
+		}
+		keys.add(key);
+		return targetArea;
+	}
 
-                        PDAnnotationLink annot = new PDAnnotationLink();
-                        annot.setAction(action);
-                        annot.setRectangle(new PDRectangle((float) targetArea.getMinX(), (float) targetArea.getMinY(), (float) targetArea.getWidth(), (float) targetArea.getHeight()));
-                        
-                        PDBorderStyleDictionary styleDict = new PDBorderStyleDictionary();
-                        styleDict.setWidth(0);
-                        styleDict.setStyle(PDBorderStyleDictionary.STYLE_SOLID);
-                        annot.setBorderStyle(styleDict);
-                        
-                        try {
-                            List<PDAnnotation> annots = page.getAnnotations();
-                            
-                            if (annots == null) {
-                                annots = new ArrayList<PDAnnotation>();
-                                page.setAnnotations(annots);
-                            }
-                            
-                            annots.add(annot);
-                            
-                        } catch (IOException e) {
-                            throw new PdfContentStreamAdapter.PdfException("processLink", e);
-                        }
-                    }
-                } else if (uri.indexOf("://") != -1) {
-                    PDActionURI uriAct = new PDActionURI();
-                    uriAct.setURI(uri);
+	private void processLink(RenderingContext c, Box box, PDPage page, float pageHeight, AffineTransform transform) {
+		Element elem = box.getElement();
+		if (elem != null) {
+			NamespaceHandler handler = _sharedContext.getNamespaceHandler();
+			String uri = handler.getLinkUri(elem);
+			if (uri != null) {
+				addUriAsLink(c, box, page, pageHeight, transform, elem, handler, uri, null);
+			}
+		}
+		if (box instanceof BlockBox) {
+			ReplacedElement element = ((BlockBox) box).getReplacedElement();
+			if (element instanceof IPdfBoxElementWithShapedLinks) {
+				Map<Shape, String> linkMap = ((IPdfBoxElementWithShapedLinks) element).getLinkMap();
+				if (linkMap != null) {
+					for (Entry<Shape, String> shapeStringEntry : linkMap.entrySet()) {
+						Shape shape = shapeStringEntry.getKey();
+						String shapeUri = shapeStringEntry.getValue();
+						NamespaceHandler handler = _sharedContext.getNamespaceHandler();
+						addUriAsLink(c, box, page, pageHeight, transform, elem, handler, shapeUri, shape);
+					}
+				}
+			}
+		}
+	}
 
-                    Rectangle2D targetArea = checkLinkArea(page, c, box, pageHeight, transform);
-                    if (targetArea == null) {
-                        return;
-                    }
-                    PDAnnotationLink annot = new PDAnnotationLink();
-                    annot.setAction(uriAct);
-                    annot.setRectangle(new PDRectangle((float) targetArea.getMinX(), (float) targetArea.getMinY(), (float) targetArea.getWidth(), (float) targetArea.getHeight()));
-                    
-                    PDBorderStyleDictionary styleDict = new PDBorderStyleDictionary();
-                    styleDict.setWidth(0);
-                    styleDict.setStyle(PDBorderStyleDictionary.STYLE_SOLID);
-                    annot.setBorderStyle(styleDict);
-                    
-                    try {
-                        page.getAnnotations().add(annot);
-                    } catch (IOException e) {
-                        throw new PdfContentStreamAdapter.PdfException("processLink", e);
-                    }
-                }
-            }
-        }
-    }
+	private static boolean isPointEqual(Point2D.Float p1, Point2D.Float p2) {
+		final double epsilon = 0.000001;
+		return Math.abs(p1.x - p2.x) < epsilon && Math.abs(p1.y - p2.y) < epsilon;
+	}
 
-    private PDPageXYZDestination createDestination(RenderingContext c, Box box) {
-        PDPageXYZDestination result = new PDPageXYZDestination();
+	private static void removeDoublicatePoints(List<Point2D.Float> points) {
+		boolean rerun;
+		do {
+			rerun = false;
+			/*
+			 * We can only form triangles if three points are not the same. So we must
+			 * filter out all points which follow each other and are the same.
+			 */
+			for (int i = 0; i < points.size() - 1; i++) {
+				Point2D.Float p1 = points.get(i);
+				Point2D.Float p2 = points.get(i + 1);
+				if (isPointEqual(p1, p2)) {
+					points.remove(i);
+					rerun = true;
+				}
+			}
+			/*
+			 * And we must filter out the same points with gap of 1 between them
+			 */
+			for (int i = 0; i < points.size() - 2; i++) {
+				Point2D.Float p1 = points.get(i);
+				Point2D.Float p2 = points.get(i + 2);
+				if (isPointEqual(p1, p2)) {
+					points.remove(i);
+					rerun = true;
+				}
+			}
+		} while (rerun);
+	}
 
-        PageBox page = _root.getLayer().getPage(c, _od.getPageRefY(box));
-        int distanceFromTop = page.getMarginBorderPadding(c, CalculatedStyle.TOP);
-        distanceFromTop += box.getAbsY() + box.getMargin(c).top() - page.getTop();
+	private void addUriAsLink(RenderingContext c, Box box, PDPage page, float pageHeight, AffineTransform transform,
+			Element elem, NamespaceHandler handler, String uri, Shape linkShape) {
+		if (uri.length() > 1 && uri.charAt(0) == '#') {
+			String anchor = uri.substring(1);
+			Box target = _sharedContext.getBoxById(anchor);
+			if (target != null) {
+				PDPageXYZDestination dest = createDestination(c, target);
 
-        result.setTop((int) (page.getHeight(c) / _dotsPerPoint - distanceFromTop / _dotsPerPoint));
-        result.setPage(_od.getWriter().getPage(_od.getStartPageNo() + page.getPageNo()));
+				PDAction action;
+				if (handler.getAttributeValue(elem, "onclick") != null
+						&& !"".equals(handler.getAttributeValue(elem, "onclick"))) {
+					action = new PDActionJavaScript(handler.getAttributeValue(elem, "onclick"));
+				} else {
+					PDActionGoTo go = new PDActionGoTo();
+					go.setDestination(dest);
+					action = go;
+				}
 
-        return result;
-    }
+				Rectangle2D targetArea = checkLinkArea(page, c, box, pageHeight, transform, linkShape);
+				if (targetArea == null) {
+					return;
+				}
 
-    public static Rectangle2D createTargetArea(RenderingContext c, Box box, float pageHeight, AffineTransform transform, Box _root, PdfBoxOutputDevice _od) {
-        Rectangle bounds = box.getContentAreaEdge(box.getAbsX(), box.getAbsY(), c);
-        PageBox page = _root.getLayer().getPage(c, bounds.y);
+				PDAnnotationLink annot = new PDAnnotationLink();
+				annot.setAction(action);
+				if (!placeAnnotation(transform, linkShape, targetArea, annot))
+					return;
 
-        float bottom = _od.getDeviceLength(page.getBottom() - (bounds.y + bounds.height)
-               + page.getMarginBorderPadding(c, CalculatedStyle.BOTTOM));
-        float left = _od.getDeviceLength(page.getMarginBorderPadding(c, CalculatedStyle.LEFT) + bounds.x);
+				addLinkToPage(page, annot);
+			}
+		} else if (uri.contains("://")) {
+			PDActionURI uriAct = new PDActionURI();
+			uriAct.setURI(uri);
 
-        Rectangle2D result = new Rectangle2D.Float(left, bottom, _od.getDeviceLength(bounds.width), _od.getDeviceLength(bounds.height));
-        return result;
-    }
-    
-    public static class LinkDetails {
-        
-        RenderingContext c;
-        Box box;
-        PDPage page;
-        float pageHeight;
-        AffineTransform transform;   
-    }
-    
-    public void processLinkLater(RenderingContext c, Box box, PDPage page, float pageHeight, AffineTransform transform)
-    {
-        LinkDetails link = new LinkDetails();
-        link.c = c;
-        link.box = box;
-        link.page = page;
-        link.pageHeight = pageHeight;
-        link.transform = transform;
-        
-        _links.add(link);
-    }
-    
-    public void processLinks()
-    {
-        for (int i = 0; i < _links.size(); i++)
-        {
-            LinkDetails link = (LinkDetails) _links.get(i);
-            processLink(link.c, link.box, link.page, link.pageHeight, link.transform);
-        }
-    }
+			Rectangle2D targetArea = checkLinkArea(page, c, box, pageHeight, transform, linkShape);
+			if (targetArea == null) {
+				return;
+			}
+			PDAnnotationLink annot = new PDAnnotationLink();
+			annot.setAction(uriAct);
+			if (!placeAnnotation(transform, linkShape, targetArea, annot))
+				return;
+
+			addLinkToPage(page, annot);
+		}
+	}
+
+	@SuppressWarnings("BooleanMethodIsAlwaysInverted")
+	private boolean placeAnnotation(AffineTransform transform, Shape linkShape, Rectangle2D targetArea,
+			PDAnnotationLink annot) {
+		annot.setRectangle(new PDRectangle((float) targetArea.getMinX(), (float) targetArea.getMinY(),
+				(float) targetArea.getWidth(), (float) targetArea.getHeight()));
+		if (linkShape != null) {
+			float[] quadPoints = mapShapeToQuadPoints(transform, linkShape, targetArea);
+			/*
+			 * Is this not an area shape? Then we can not setup quads - ignore this shape.
+			 */
+			if (quadPoints.length == 0)
+				return false;
+			annot.setQuadPoints(quadPoints);
+		}
+		return true;
+	}
+
+	private float[] mapShapeToQuadPoints(AffineTransform transform, Shape linkShape, Rectangle2D targetArea) {
+		List<Point2D.Float> points = new ArrayList<Point2D.Float>();
+		AffineTransform transformForQuads = new AffineTransform();
+		transformForQuads.translate(targetArea.getMinX(), targetArea.getMinY());
+		// We must flip the whole thing upside down
+		transformForQuads.translate(0, targetArea.getHeight());
+		transformForQuads.scale(1, -1);
+		transformForQuads.concatenate(transform);
+		Area area = new Area(linkShape);
+		PathIterator pathIterator = area.getPathIterator(transformForQuads, 1.0);
+		double[] vals = new double[6];
+		while (!pathIterator.isDone()) {
+			int type = pathIterator.currentSegment(vals);
+			switch (type) {
+			case PathIterator.SEG_CUBICTO:
+				throw new RuntimeException("Invalid State, Area should never give us a curve here!");
+			case PathIterator.SEG_LINETO:
+				points.add(new Point2D.Float((float) vals[0], (float) vals[1]));
+				break;
+			case PathIterator.SEG_MOVETO:
+				points.add(new Point2D.Float((float) vals[0], (float) vals[1]));
+				break;
+			case PathIterator.SEG_QUADTO:
+				throw new RuntimeException("Invalid State, Area should never give us a curve here!");
+			case PathIterator.SEG_CLOSE:
+				break;
+			default:
+				break;
+			}
+			pathIterator.next();
+		}
+
+		removeDoublicatePoints(points);
+
+		KongAlgo algo = new KongAlgo(points);
+		algo.runKong();
+
+		float ret[] = new float[algo.getTriangles().size() * 8];
+		int i = 0;
+		for (Triangle triangle : algo.getTriangles()) {
+			ret[i++] = triangle.a.x;
+			ret[i++] = triangle.a.y;
+			ret[i++] = triangle.b.x;
+			ret[i++] = triangle.b.y;
+			/*
+			 * To get a quad we add the point between b and c
+			 */
+			ret[i++] = triangle.b.x + (triangle.c.x - triangle.b.x) / 2;
+			ret[i++] = triangle.b.y + (triangle.c.y - triangle.b.y) / 2;
+
+			ret[i++] = triangle.c.x;
+			ret[i++] = triangle.c.y;
+		}
+
+		if (ret.length % 8 != 0)
+			throw new IllegalStateException("Not exact 8xn QuadPoints!");
+		for (; i < ret.length; i += 2) {
+			if (ret[i] < targetArea.getMinX() || ret[i] > targetArea.getMaxX())
+				throw new IllegalStateException("Invalid rectangle calculation. Map shape is out of bound.");
+			if (ret[i + 1] < targetArea.getMinY() || ret[i + 1] > targetArea.getMaxY())
+				throw new IllegalStateException("Invalid rectangle calculation. Map shape is out of bound.");
+		}
+		return ret;
+	}
+
+	private void addLinkToPage(PDPage page, PDAnnotationLink annot) {
+		PDBorderStyleDictionary styleDict = new PDBorderStyleDictionary();
+		styleDict.setWidth(0);
+		styleDict.setStyle(PDBorderStyleDictionary.STYLE_SOLID);
+		annot.setBorderStyle(styleDict);
+
+		try {
+			List<PDAnnotation> annots = page.getAnnotations();
+
+			if (annots == null) {
+				annots = new ArrayList<PDAnnotation>();
+				page.setAnnotations(annots);
+			}
+
+			annots.add(annot);
+		} catch (IOException e) {
+			throw new PdfContentStreamAdapter.PdfException("processLink", e);
+		}
+	}
+
+	private PDPageXYZDestination createDestination(RenderingContext c, Box box) {
+		PDPageXYZDestination result = new PDPageXYZDestination();
+
+		PageBox page = _root.getLayer().getPage(c, _od.getPageRefY(box));
+		int distanceFromTop = page.getMarginBorderPadding(c, CalculatedStyle.TOP);
+		distanceFromTop += box.getAbsY() + box.getMargin(c).top() - page.getTop();
+
+		result.setTop((int) (page.getHeight(c) / _dotsPerPoint - distanceFromTop / _dotsPerPoint));
+		result.setPage(_od.getWriter().getPage(_od.getStartPageNo() + page.getPageNo()));
+
+		return result;
+	}
+
+	public static Rectangle2D createTargetArea(RenderingContext c, Box box, float pageHeight, AffineTransform transform,
+			Box _root, PdfBoxOutputDevice _od) {
+		Rectangle bounds = box.getContentAreaEdge(box.getAbsX(), box.getAbsY(), c);
+		PageBox page = _root.getLayer().getPage(c, bounds.y);
+
+		float bottom = _od.getDeviceLength(
+				page.getBottom() - (bounds.y + bounds.height) + page.getMarginBorderPadding(c, CalculatedStyle.BOTTOM));
+		float left = _od.getDeviceLength(page.getMarginBorderPadding(c, CalculatedStyle.LEFT) + bounds.x);
+
+		return new Rectangle2D.Float(left, bottom, _od.getDeviceLength(bounds.width),
+				_od.getDeviceLength(bounds.height));
+	}
+
+	public static class LinkDetails {
+
+		RenderingContext c;
+		Box box;
+		PDPage page;
+		float pageHeight;
+		AffineTransform transform;
+	}
+
+	public void processLinkLater(RenderingContext c, Box box, PDPage page, float pageHeight,
+			AffineTransform transform) {
+		LinkDetails link = new LinkDetails();
+		link.c = c;
+		link.box = box;
+		link.page = page;
+		link.pageHeight = pageHeight;
+		link.transform = transform;
+
+		_links.add(link);
+	}
+
+	public void processLinks() {
+		for (LinkDetails link : _links) {
+			processLink(link.c, link.box, link.page, link.pageHeight, link.transform);
+		}
+	}
 }

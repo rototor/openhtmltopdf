@@ -9,6 +9,7 @@ import com.openhtmltopdf.java2d.api.BufferedImagePageProcessor;
 import com.openhtmltopdf.java2d.api.DefaultPageProcessor;
 import com.openhtmltopdf.java2d.api.FSPageOutputStreamSupplier;
 import com.openhtmltopdf.java2d.api.Java2DRendererBuilder;
+import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder.TextDirection;
 import com.openhtmltopdf.render.DefaultObjectDrawerFactory;
@@ -17,17 +18,20 @@ import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
 import com.openhtmltopdf.util.JDKXRLogger;
 import com.openhtmltopdf.util.XRLog;
 import com.openhtmltopdf.util.XRLogger;
+
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.util.Charsets;
 import org.w3c.dom.Element;
 
 import javax.imageio.ImageIO;
+
 import java.awt.*;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.logging.Level;
 
 public class TestcaseRunner {
@@ -95,6 +99,14 @@ public class TestcaseRunner {
 		 */
 		runTestCase("transform");
 
+		runTestCase("quoting");
+		
+		runTestCase("math-ml");
+
+		/*
+		 * Broken rotate() on the second page
+		 */
+		runTestCase("RepeatedTableTransformSample");
 		/* Add additional test cases here. */
 	}
 
@@ -165,6 +177,7 @@ public class TestcaseRunner {
 			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 			builder.defaultTextDirection(TextDirection.LTR);
 			builder.useSVGDrawer(new BatikSVGDrawer());
+			builder.useMathMLDrawer(new MathMLDrawer());
 			builder.useObjectDrawerFactory(buildObjectDrawerFactory());
 
 			builder.withHtmlContent(html, TestcaseRunner.class.getResource("/testcases/").toString());
@@ -178,6 +191,8 @@ public class TestcaseRunner {
 	private static DefaultObjectDrawerFactory buildObjectDrawerFactory() {
 		DefaultObjectDrawerFactory objectDrawerFactory = new DefaultObjectDrawerFactory();
 		objectDrawerFactory.registerDrawer("custom/binary-tree", new SampleObjectDrawerBinaryTree());
+		objectDrawerFactory.registerDrawer("jfreechart/pie", new JFreeChartPieDiagramObjectDrawer());
+		objectDrawerFactory.registerDrawer("jfreechart/bar", new JFreeChartBarDiagramObjectDrawer());
 		return objectDrawerFactory;
 	}
 
@@ -245,8 +260,8 @@ public class TestcaseRunner {
 		int angle;
 
 		@Override
-		public void drawObject(Element e, double x, double y, final double width, final double height,
-				OutputDevice outputDevice, RenderingContext ctx, final int dotsPerPixel) {
+		public Map<Shape,String> drawObject(Element e, double x, double y, final double width, final double height,
+											OutputDevice outputDevice, RenderingContext ctx, final int dotsPerPixel) {
 			final int depth = Integer.parseInt(e.getAttribute("data-depth"));
 			fanout = Integer.parseInt(e.getAttribute("data-fanout"));
 			angle = Integer.parseInt(e.getAttribute("data-angle"));
@@ -285,6 +300,7 @@ public class TestcaseRunner {
 									(int) (realHeight - titleBottomHeight));
 						}
 					});
+			return null;
 		}
 
 		private void renderTree(Graphics2D gfx, double x, double y, double len, double angleDeg, int depth) {

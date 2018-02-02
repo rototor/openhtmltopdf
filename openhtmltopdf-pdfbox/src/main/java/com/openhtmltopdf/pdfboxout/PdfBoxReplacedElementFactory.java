@@ -24,19 +24,19 @@ import com.openhtmltopdf.css.style.CalculatedStyle;
 import com.openhtmltopdf.extend.*;
 import com.openhtmltopdf.layout.LayoutContext;
 import com.openhtmltopdf.render.BlockBox;
-import com.openhtmltopdf.simple.extend.FormSubmissionListener;
-
 import org.w3c.dom.Element;
 
 public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
     private final PdfBoxOutputDevice _outputDevice;
     private final SVGDrawer _svgImpl;
+    private final SVGDrawer _mathmlImpl;
     private final FSObjectDrawerFactory _objectDrawerFactory;
 
-    public PdfBoxReplacedElementFactory(PdfBoxOutputDevice outputDevice, SVGDrawer svgImpl, FSObjectDrawerFactory objectDrawerFactory) {
+    public PdfBoxReplacedElementFactory(PdfBoxOutputDevice outputDevice, SVGDrawer svgImpl, FSObjectDrawerFactory objectDrawerFactory, SVGDrawer mathmlImpl) {
         _outputDevice = outputDevice;
         _svgImpl = svgImpl;
         _objectDrawerFactory = objectDrawerFactory;
+        _mathmlImpl = mathmlImpl;
     }
 
     public ReplacedElement createReplacedElement(LayoutContext c, BlockBox box,
@@ -48,11 +48,11 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
 
         String nodeName = e.getNodeName();
 
-        if (nodeName.equals("svg") && _svgImpl != null) {
-            int cssMaxWidth = CalculatedStyle.getCSSMaxWidth(c, box);
-            int cssMaxHeight = CalculatedStyle.getCSSMaxHeight(c, box);
-            
-            return new PdfBoxSVGReplacedElement(e, _svgImpl, cssWidth, cssHeight, cssMaxWidth, cssMaxHeight, c.getSharedContext().getDotsPerPixel());
+        
+        if (nodeName.equals("math") && _mathmlImpl != null) {
+            return new PdfBoxSVGReplacedElement(e, _mathmlImpl, cssWidth, cssHeight, box, c, c.getSharedContext());
+        } else if (nodeName.equals("svg") && _svgImpl != null) {
+            return new PdfBoxSVGReplacedElement(e, _svgImpl, cssWidth, cssHeight, box, c, c.getSharedContext());
         } else if (nodeName.equals("img")) {
             String srcAttr = e.getAttribute("src");
             if (srcAttr != null && srcAttr.length() > 0) {
@@ -98,33 +98,11 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
                             fsImage.scale(cssWidth, cssHeight);
                         }
                     }
-                    return new PdfBoxImageElement(fsImage);
+                    return new PdfBoxImageElement(e,fsImage,c.getSharedContext());
                 }
             }
         } else if (nodeName.equals("input")) {
-            String type = e.getAttribute("type");
-// TODO: Implement form fields.
-//            if (type.equals("hidden")) {
-//                return new EmptyReplacedElement(1, 1);
-//            } else if (type.equals("checkbox")) {
-//                return new CheckboxFormField(c, box, cssWidth, cssHeight);
-//            } else if (type.equals("radio")) {
-//                //TODO finish support for Radio button
-//                //RadioButtonFormField result = new RadioButtonFormField(
-//                //			this, c, box, cssWidth, cssHeight);
-//                //		saveResult(e, result);
-//                //return result;
-//                return new EmptyReplacedElement(0, 0);
-//
-//            } else {
-//                return new TextFormField(c, box, cssWidth, cssHeight);
-//            }
-//            /*
-//             } else if (nodeName.equals("select")) {//TODO Support select
-//             return new SelectFormField(c, box, cssWidth, cssHeight);
-//             } else if (isTextarea(e)) {//TODO Review if this is needed the textarea item prints fine currently
-//             return new TextAreaFormField(c, box, cssWidth, cssHeight);
-//             */
+            /* We do nothing here. Form Elements are handled special in PdfBoxOutputDevice.paintBackground() */
         } else if (nodeName.equals("bookmark")) {
             // HACK Add box as named anchor and return placeholder
             BookmarkElement result = new BookmarkElement();
@@ -138,14 +116,10 @@ public class PdfBoxReplacedElementFactory implements ReplacedElementFactory {
 			FSObjectDrawer drawer = _objectDrawerFactory.createDrawer(e);
 			if (drawer != null)
 				return new PdfBoxObjectDrawerReplacedElement(e, drawer, cssWidth, cssHeight,
-						c.getSharedContext().getDotsPerPixel());
+						c.getSharedContext());
         }
 
         return null;
-    }
-
-    public void setFormSubmissionListener(FormSubmissionListener listener) {
-        // nothing to do, form submission is handled by pdf readers
     }
 
     @Override

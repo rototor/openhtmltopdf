@@ -19,30 +19,36 @@
  */
 package com.openhtmltopdf.pdfboxout;
 
-import java.awt.Point;
-import java.awt.Rectangle;
-
 import com.openhtmltopdf.extend.FSImage;
 import com.openhtmltopdf.extend.ReplacedElement;
 import com.openhtmltopdf.layout.LayoutContext;
+import com.openhtmltopdf.layout.SharedContext;
+import com.openhtmltopdf.pdfboxout.PdfBoxLinkManager.IPdfBoxElementWithShapedLinks;
 import com.openhtmltopdf.render.BlockBox;
 import com.openhtmltopdf.render.RenderingContext;
+import com.openhtmltopdf.swing.ImageMapParser;
+import org.w3c.dom.Element;
 
-public class PdfBoxImageElement implements PdfBoxReplacedElement {
-    private FSImage _image;
+import java.awt.*;
+import java.util.Map;
+
+public class PdfBoxImageElement implements PdfBoxReplacedElement, IPdfBoxElementWithShapedLinks {
+    private final FSImage _image;
 
     private Point _location = new Point(0, 0);
+    private final Map<Shape, String> imageMap;
 
-    public PdfBoxImageElement(FSImage image) {
+    public PdfBoxImageElement(Element e, FSImage image, SharedContext c) {
         _image = image;
+        imageMap = ImageMapParser.findAndParseMap(e, c);
     }
 
     public int getIntrinsicWidth() {
-        return (int) _image.getWidth();
+        return _image.getWidth();
     }
 
     public int getIntrinsicHeight() {
-        return (int) _image.getHeight();
+        return _image.getHeight();
     }
 
     public Point getLocation() {
@@ -55,6 +61,11 @@ public class PdfBoxImageElement implements PdfBoxReplacedElement {
 
     public FSImage getImage() {
         return _image;
+    }
+
+    @Override
+    public Map<Shape, String> getLinkMap() {
+        return imageMap;
     }
 
     public void detach(LayoutContext c) {
