@@ -5,7 +5,7 @@
 
   <groupId>com.openhtmltopdf</groupId>
   <artifactId>openhtmltopdf-parent</artifactId>
-  <version>0.0.1-RC13-rototor3</version>
+  <version>0.0.1-RC14-rototor1</version>
 
   <packaging>pom</packaging>
 
@@ -31,7 +31,9 @@
     <module>openhtmltopdf-jsoup-dom-converter</module>
     <module>openhtmltopdf-svg-support</module>
     <module>openhtmltopdf-java2d</module>
+    <module>openhtmltopdf-objects</module>
     <module>openhtmltopdf-mathml-support</module>
+    <module>openhtmltopdf-latex-support</module>
   </modules>
 
   <scm>

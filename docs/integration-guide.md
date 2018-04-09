@@ -4,7 +4,8 @@ OPEN HTML TO PDF
 GETTING OPEN HTML TO PDF
 ========
 New releases of Open HTML to PDF will be distributed through Maven.  Search maven for [com.openhtmltopdf](http://mvnrepository.com/artifact/com.openhtmltopdf).
-Current maven release is ````0.0.1-RC12````. If you would like to be notified of new releases, please subscribe to the [Maven issue](https://github.com/danfickle/openhtmltopdf/issues/7).
+Current maven release is ````0.0.1-RC13````. If you would like to be notified of new releases, please subscribe to the [Maven issue](https://github.com/danfickle/openhtmltopdf/issues/7).
+[You can ask for a new release, if needed](https://github.com/danfickle/openhtmltopdf/issues/182).
 
 MAVEN ARTIFACTS
 ========
@@ -12,7 +13,7 @@ Add these to your maven dependencies section as needed:
 ````xml
   	<properties>
   		<!-- Define the version of OPEN HTML TO PDF in the properties section of your POM. -->  	       
-  		<openhtml.version>0.0.1-RC12</openhtml.version>
+  		<openhtml.version>0.0.1-RC13</openhtml.version>
   	</properties>
 
   	<dependency>
@@ -65,11 +66,20 @@ Add these to your maven dependencies section as needed:
   	</dependency>
 
   	<dependency>
-  	    <!-- Optional, leave out if you do not SVG support. -->
+  	    <!-- Optional, leave out if you do not need SVG support. -->
   		<groupId>com.openhtmltopdf</groupId>
   		<artifactId>openhtmltopdf-svg-support</artifactId>
   		<version>${openhtml.version}</version>
   	</dependency>
+
+  	<dependency>
+  	    <!-- Optional, leave out if you do not need MathML support. -->
+  	    <!-- Introduced in RC-13. -->
+  		<groupId>com.openhtmltopdf</groupId>
+  		<artifactId>openhtmltopdf-mathml-support</artifactId>
+  		<version>${openhtml.version}</version>
+  	</dependency>
+
 ````
 
 MINIMAL USAGE
@@ -204,6 +214,8 @@ The library should close the reader or stream when it is finished with it.
 
 CACHE BETWEEN RUNS
 =======
+IMPORTANT: This cache system should now be considered deprecated as it is not thread safe. It will be replaced with a simple byte array cache system in the future.
+
 By default, Open HTML to PDF should not cache anything between runs. However, it allows the user to plugin an external cache. It should
 be noted that the URI received by the cache is already resolved (see below). Here is a simple external cache:
 ````java
@@ -274,11 +286,15 @@ Add the appropriate maven module, then at the start of your code, before calling
   XRLog.setLoggerImpl(new Log4JXRLogger());    
 ````
 
-SVG SUPPORT
+SVG AND MATHML SUPPORT
 =======
-Add the appropriate maven module and include this line in your builder code:
+Add the appropriate maven module and include this line in your builder code for SVG support.
 ````java
   builder.useSVGDrawer(new BatikSVGDrawer());
+````
+For MathML support:
+````java
+  builder..useMathMLDrawer(new MathMLDrawer());
 ````
 
 IMAGE OUTPUT

@@ -31,6 +31,7 @@ import com.openhtmltopdf.layout.Layer;
 import com.openhtmltopdf.layout.LayoutContext;
 import com.openhtmltopdf.layout.SharedContext;
 import com.openhtmltopdf.outputdevice.helper.BaseDocument;
+import com.openhtmltopdf.extend.FSDOMMutator;
 import com.openhtmltopdf.outputdevice.helper.PageDimensions;
 import com.openhtmltopdf.outputdevice.helper.UnicodeImplementation;
 import com.openhtmltopdf.pdfboxout.PdfBoxOutputDevice.Metadata;
@@ -75,6 +76,7 @@ public class PdfBoxRenderer implements Closeable {
 
     private final SharedContext _sharedContext;
     private final PdfBoxOutputDevice _outputDevice;
+    private final List<FSDOMMutator> _domMutators;
 
     private Document _doc;
     private BlockBox _root;
@@ -105,43 +107,38 @@ public class PdfBoxRenderer implements Closeable {
     /**
      * This method is constantly changing as options are added to the builder.
      */
-    PdfBoxRenderer(BaseDocument doc, UnicodeImplementation unicode, 
-            HttpStreamFactory httpStreamFactory, 
-            OutputStream os, FSUriResolver resolver, FSCache cache, SVGDrawer svgImpl,
-            PageDimensions pageSize, float pdfVersion, String replacementText, boolean testMode,
-            FSObjectDrawerFactory objectDrawerFactory, String preferredTransformerFactoryImplementationClass,
-            String producer, SVGDrawer mathmlImpl) {
-        
-        _pdfDoc = new PDDocument();
-        _pdfDoc.setVersion(pdfVersion);
+    PdfBoxRenderer(BaseDocument doc, UnicodeImplementation unicode,
+            PageDimensions pageSize, PdfRendererBuilderState state) {
 
-        _producer = producer;
+        _pdfDoc = state.pddocument != null ? state.pddocument : new PDDocument();
+        _pdfDoc.setVersion(state._pdfVersion);
 
-        _svgImpl = svgImpl;
-        _mathmlImpl = mathmlImpl;
+        _producer = state._producer;
+
+        _svgImpl = state._svgImpl;
+        _mathmlImpl = state._mathmlImpl;
         _dotsPerPoint = DEFAULT_DOTS_PER_POINT;
-        _testMode = testMode;
-        _outputDevice = new PdfBoxOutputDevice(DEFAULT_DOTS_PER_POINT, testMode);
+        _testMode = state._testMode;
+        _outputDevice = new PdfBoxOutputDevice(DEFAULT_DOTS_PER_POINT, _testMode);
         _outputDevice.setWriter(_pdfDoc);
         
         PdfBoxUserAgent userAgent = new PdfBoxUserAgent(_outputDevice);
 
-        if (httpStreamFactory != null) {
-            userAgent.setHttpStreamFactory(httpStreamFactory);
+        userAgent.setProtocolsStreamFactory(state._streamFactoryMap);
+        
+        if (state._resolver != null) {
+            userAgent.setUriResolver(state._resolver);
         }
         
-        if (resolver != null) {
-            userAgent.setUriResolver(resolver);
-        }
-        
-        if (cache != null) {
-            userAgent.setExternalCache(cache);
+        if (state._cache != null) {
+            userAgent.setExternalCache(state._cache);
         }
         
         _sharedContext = new SharedContext();
         _sharedContext.registerWithThread();
         
-        _sharedContext._preferredTransformerFactoryImplementationClass = preferredTransformerFactoryImplementationClass;
+        _sharedContext._preferredTransformerFactoryImplementationClass = state._preferredTransformerFactoryImplementationClass;
+        _sharedContext._preferredDocumentBuilderFactoryImplementationClass = state._preferredDocumentBuilderFactoryImplementationClass;
         
         _sharedContext.setUserAgentCallback(userAgent);
         _sharedContext.setCss(new StyleReference(userAgent));
@@ -151,7 +148,7 @@ public class PdfBoxRenderer implements Closeable {
         PdfBoxFontResolver fontResolver = new PdfBoxFontResolver(_sharedContext, _pdfDoc);
         _sharedContext.setFontResolver(fontResolver);
 
-        PdfBoxReplacedElementFactory replacedElementFactory = new PdfBoxReplacedElementFactory(_outputDevice, svgImpl, objectDrawerFactory, mathmlImpl);
+        PdfBoxReplacedElementFactory replacedElementFactory = new PdfBoxReplacedElementFactory(_outputDevice, state._svgImpl, state._objectDrawerFactory, state._mathmlImpl);
         _sharedContext.setReplacedElementFactory(replacedElementFactory);
 
         _sharedContext.setTextRenderer(new PdfBoxTextRenderer());
@@ -162,8 +159,8 @@ public class PdfBoxRenderer implements Closeable {
         
         this.getSharedContext().setDefaultPageSize(pageSize.w, pageSize.h, pageSize.isSizeInches);
         
-        if (replacementText != null) {
-            this.getSharedContext().setReplacementText(replacementText);
+        if (state._replacementText != null) {
+            this.getSharedContext().setReplacementText(state._replacementText);
         }
         
         if (unicode.splitterFactory != null) {
@@ -196,7 +193,9 @@ public class PdfBoxRenderer implements Closeable {
         }
         
         this._defaultTextDirection = unicode.textDirection ? BidiSplitter.RTL : BidiSplitter.LTR;
-        
+
+        this._domMutators = state._domMutators;
+
         if (doc.html != null) {
             this.setDocumentFromStringP(doc.html, doc.baseUri);
         }
@@ -215,7 +214,7 @@ public class PdfBoxRenderer implements Closeable {
             }
         }
         
-        this._os = os;
+        this._os = state._os;
     }
 
     public Document getDocument() {
@@ -262,6 +261,12 @@ public class PdfBoxRenderer implements Closeable {
     
     private void setDocumentP(Document doc, String url, NamespaceHandler nsh) {
         _doc = doc;
+
+        /*
+         * Apply potential DOM mutations
+         */
+        for (FSDOMMutator domMutator : _domMutators)
+            domMutator.mutateDocument(doc);
 
         getFontResolver().flushFontFaceFonts();
 
@@ -510,7 +515,7 @@ public class PdfBoxRenderer implements Closeable {
             _outputDevice.finishPage();
             
             if (i != pageCount - 1) {
-                PageBox nextPage = (PageBox) pages.get(i + 1);
+                PageBox nextPage = pages.get(i + 1);
                 Rectangle2D nextPageSize = new Rectangle2D.Float(0, 0, nextPage.getWidth(c) / _dotsPerPoint,
                         nextPage.getHeight(c) / _dotsPerPoint);
                 PDPage pageNext = new PDPage(new PDRectangle((float) nextPageSize.getWidth(), (float) nextPageSize.getHeight()));
@@ -557,7 +562,7 @@ public class PdfBoxRenderer implements Closeable {
         doc.setDocumentInformation(info);
     }
 
-    private void paintPage(RenderingContext c, PageBox page) throws IOException {
+    private void paintPage(RenderingContext c, PageBox page) {
         // TODO: provideMetadataToPage(_pdfDoc, page);
 
         page.paintBackground(c, 0, Layer.PAGED_MODE_PRINT);
@@ -634,7 +639,7 @@ public class PdfBoxRenderer implements Closeable {
     }
 
     private String createXPacket(String metadata) {
-        StringBuffer result = new StringBuffer(metadata.length() + 50);
+        StringBuilder result = new StringBuilder(metadata.length() + 50);
         result.append("<?xpacket begin='\uFEFF' id='W5M0MpCehiHzreSzNTczkc9d'?>\n");
         result.append(metadata);
         result.append("\n<?xpacket end='r'?>");
@@ -724,7 +729,7 @@ public class PdfBoxRenderer implements Closeable {
      * Cleanup thread resources. MUST be called after finishing with the renderer.
      */
     @Override
-    public void close() throws IOException {
+    public void close() {
         this.cleanup();
     }
 }

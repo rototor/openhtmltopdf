@@ -934,7 +934,7 @@ public class PrimitivePropertyBuilders {
         }
 
         private String concat(List strings, char separator) {
-            StringBuffer buf = new StringBuffer(64);
+            StringBuilder buf = new StringBuilder(64);
             for (Iterator i = strings.iterator(); i.hasNext(); ) {
                 String s = (String)i.next();
                 buf.append(s);
@@ -1824,6 +1824,18 @@ public class PrimitivePropertyBuilders {
                new TransformOriginX().buildDeclarations(CSSName.FS_TRANSFORM_ORIGIN_X, Collections.singletonList(x), origin, important).get(0),
                new TransformOriginY().buildDeclarations(CSSName.FS_TRANSFORM_ORIGIN_Y, Collections.singletonList(y), origin, important).get(0)
             );
+        }
+    }
+
+    public static class ImageRenderingBuilder extends SingleIdent {
+        // left | right | center | justify | inherit
+        private static final BitSet ALLOWED = setFor(
+                new IdentValue[] {
+                        IdentValue.AUTO, IdentValue.PIXELATED,
+                        IdentValue.CRISP_EDGES });
+
+        protected BitSet getAllowed() {
+            return ALLOWED;
         }
     }
 }

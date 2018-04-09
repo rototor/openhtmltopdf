@@ -40,6 +40,7 @@ import com.openhtmltopdf.util.Configuration;
 import com.openhtmltopdf.util.XRLog;
 import de.rototor.pdfbox.graphics2d.PdfBoxGraphics2D;
 import de.rototor.pdfbox.graphics2d.PdfBoxGraphics2DFontTextDrawer;
+import org.apache.pdfbox.cos.COSInputStream;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -70,6 +71,7 @@ import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 import java.util.List;
 import java.util.Map.Entry;
@@ -681,6 +683,10 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         return _cp;
     }
 
+    public PDPage getPage(){
+        return _page;
+    }
+
     private void followPath(Shape s, int drawType) {
         if (s == null)
             return;
@@ -928,10 +934,32 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         img.setXObject(xobject);
     }
 
-    public void drawImage(FSImage fsImage, int x, int y) {
+    public void drawImage(FSImage fsImage, int x, int y, boolean interpolate) {
         PdfBoxImage img = (PdfBoxImage) fsImage;
 
         PDImageXObject xobject = img.getXObject();
+		if (interpolate) {
+			xobject.setInterpolate(true);
+		} else {
+			/*
+			 * Specialcase for not interpolating an image, default is to always interpolate.
+			 * We must copy the image
+			 */
+			try {
+				InputStream inputStream = xobject.getStream().getCOSObject().createRawInputStream();
+				PDImageXObject cloneImage = new PDImageXObject(_writer, inputStream, COSName.FLATE_DECODE,
+						xobject.getWidth(), xobject.getHeight(), xobject.getBitsPerComponent(),
+						xobject.getColorSpace());
+				cloneImage.setInterpolate(false);
+				if (xobject.getSoftMask() != null)
+					cloneImage.getCOSObject().setItem(COSName.SMASK, xobject.getSoftMask());
+				inputStream.close();
+				xobject = cloneImage;
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+        
 
         AffineTransform transformer = (AffineTransform) getTransform().clone();
         transformer.translate(x, y);
@@ -1467,15 +1495,11 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     
     @Override
     public void popTransforms(List<AffineTransform> inverse) {
-		// We don't apply the inverse here, we just restore the graphics state.
-		// Applying the inverse would work, but just save/restore is way smaller in the content stream
-        // then putting out many matrices
-		for (int i = 0; i < inverse.size(); i++)
-			transformStack.pop();
-		if (inverse.size() > 0) {
-			// Only restore the state if we really had something to apply
-			_cp.restoreGraphics();
-		}
+        Collections.reverse(inverse);
+        for (AffineTransform transform : inverse) {
+            transformStack.pop();
+            _cp.applyPdfMatrix(transform);
+        }
     }
     
     @Override
@@ -1483,7 +1507,6 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
 		if (transforms.size() == 0)
 			return Collections.emptyList();
         // We simply do a saveGraphics here, so we don't have to apply the inverse later to restore
-        _cp.saveGraphics();
         List<AffineTransform> inverse = new ArrayList<AffineTransform>(transforms.size());
         try {
             for (AffineTransform transform : transforms) {

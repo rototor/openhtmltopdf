@@ -1,5 +1,15 @@
 package com.openhtmltopdf.documentation.generator;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.util.Charsets;
+
+import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
 import com.vladsch.flexmark.ast.Node;
@@ -54,6 +64,7 @@ public class TemplateAuthorGuideGenerator {
 		try {
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 			builder.useSVGDrawer(new BatikSVGDrawer());
+			builder.useMathMLDrawer(new MathMLDrawer());
 
 			builder.withHtmlContent(html, TemplateAuthorGuideGenerator.class.getResource("/documentation/").toString());
 			builder.toStream(outputStream);
