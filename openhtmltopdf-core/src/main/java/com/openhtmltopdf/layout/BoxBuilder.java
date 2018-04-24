@@ -95,8 +95,7 @@ public class BoxBuilder {
     }
     
     public static BlockBox createRootBox(LayoutContext c, Document document) {
-        
-    	splitParagraphs(c, document);
+        splitParagraphs(c, document);
     	
         Element root = document.getDocumentElement();
 
@@ -127,7 +126,11 @@ public class BoxBuilder {
 
     public static void createChildren(LayoutContext c, BlockBox parent) {
 
-		List children = new ArrayList();
+    	if (parent.shouldBeReplaced()) {
+    		return;
+    	}
+
+        List children = new ArrayList();
 
         ChildBoxInfo info = new ChildBoxInfo();
 
@@ -135,6 +138,7 @@ public class BoxBuilder {
 
         boolean parentIsNestingTableContent = isNestingTableContent(parent.getStyle().getIdent(
                 CSSName.DISPLAY));
+        
         if (!parentIsNestingTableContent && !info.isContainsTableContent()) {
             resolveChildren(c, parent, children, info);
         } else {
@@ -1253,6 +1257,16 @@ public class BoxBuilder {
         return child;
     }
     
+    private static InlineBox doFakeBidi(LayoutContext c, Text textNode, Element parent, CalculatedStyle parentStyle, InlineBox previousIB, List children) {
+    	String runText = textNode.getData();
+    	InlineBox child = createInlineBox(runText, parent, parentStyle, textNode);
+    	child.setTextDirection(BidiSplitter.LTR);
+    	previousIB = setupInlineChild(child, previousIB);
+       	children.add(child);
+       	return previousIB;
+    }
+    
+    
     /**
      * Attempts to divide a Text node further into directional text runs, either LTR or RTL. 
      * @param c
@@ -1264,9 +1278,18 @@ public class BoxBuilder {
     private static InlineBox doBidi(LayoutContext c, Text textNode, Element parent, CalculatedStyle parentStyle, InlineBox previousIB, List children) {
     	
         Paragraph para = c.getParagraphSplitter().lookupParagraph(textNode);
-        assert(para != null);
+        if (para == null) {
+        	// Must be no implementation of BIDI for this Text node.
+        	return doFakeBidi(c, textNode, parent, parentStyle, previousIB, children);
+        }
         
         int startIndex = para.getFirstCharIndexInParagraph(textNode); // Index into the paragraph.
+        
+        if (startIndex < 0) {
+        	// Must be a fake implementation of BIDI.
+        	return doFakeBidi(c, textNode, parent, parentStyle, previousIB, children);
+        }
+        
         int nodeIndex = 0;                                            // Index into the text node.
         String runText;                                               // Calculated text for the directional run.
         

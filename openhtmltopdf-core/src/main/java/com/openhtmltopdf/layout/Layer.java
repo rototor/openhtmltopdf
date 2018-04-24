@@ -31,8 +31,20 @@ import com.openhtmltopdf.css.style.EmptyStyle;
 import com.openhtmltopdf.css.style.FSDerivedValue;
 import com.openhtmltopdf.css.style.derived.ListValue;
 import com.openhtmltopdf.css.style.derived.RectPropertySet;
+import com.openhtmltopdf.newtable.CollapsedBorderValue;
+import com.openhtmltopdf.newtable.TableBox;
 import com.openhtmltopdf.newtable.TableCellBox;
 import com.openhtmltopdf.render.*;
+import com.openhtmltopdf.render.displaylist.DisplayListOperation;
+import com.openhtmltopdf.render.displaylist.PagedBoxCollector;
+import com.openhtmltopdf.render.displaylist.PaintBackgroundAndBorders;
+import com.openhtmltopdf.render.displaylist.PaintInlineContent;
+import com.openhtmltopdf.render.displaylist.PaintLayerBackgroundAndBorder;
+import com.openhtmltopdf.render.displaylist.PaintListMarkers;
+import com.openhtmltopdf.render.displaylist.PaintReplacedElement;
+import com.openhtmltopdf.render.displaylist.PaintReplacedElements;
+import com.openhtmltopdf.render.displaylist.PaintRootElementBackground;
+import com.openhtmltopdf.render.displaylist.PagedBoxCollector.PageResult;
 import com.openhtmltopdf.util.XRLog;
 import org.w3c.dom.css.CSSPrimitiveValue;
 
@@ -106,7 +118,7 @@ public class Layer {
     public Layer getParent() {
         return _parent;
     }
-
+    
     public boolean isStackingContext() {
         return _stackingContext;
     }
@@ -180,10 +192,10 @@ public class Layer {
         }
     }
 
-    private static final int POSITIVE = 1;
-    private static final int ZERO = 2;
-    private static final int NEGATIVE = 3;
-    private static final int AUTO = 4;
+    public static final int POSITIVE = 1;
+    public static final int ZERO = 2;
+    public static final int NEGATIVE = 3;
+    public static final int AUTO = 4;
 
     public void addFloat(BlockBox floater, BlockFormattingContext bfc) {
         if (_floats == null) {
@@ -201,7 +213,7 @@ public class Layer {
      * @param which NEGATIVE ZERO POSITIVE AUTO corresponding to z-index property.
      * @return
      */
-    private List<Layer> collectLayers(int which) {
+    public List<Layer> collectLayers(int which) {
         List<Layer> result = new ArrayList<Layer>();
         List<Layer> children = getChildren();
 
@@ -249,16 +261,14 @@ public class Layer {
         return result;
     }
 
-    private static class ZIndexComparator implements Comparator {
-        public int compare(Object o1, Object o2) {
-            Layer l1 = (Layer)o1;
-            Layer l2 = (Layer)o2;
+    private static class ZIndexComparator implements Comparator<Layer> {
+        public int compare(Layer l1, Layer l2) {
             return l1.getZIndex() - l2.getZIndex();
         }
     }
 
-    private List getSortedLayers(int which) {
-        List result = collectLayers(which);
+    public List<Layer> getSortedLayers(int which) {
+        List<Layer> result = collectLayers(which);
 
         Collections.sort(result, new ZIndexComparator());
 
@@ -266,7 +276,7 @@ public class Layer {
     }
 
     private void paintBackgroundsAndBorders(
-            RenderingContext c, List blocks,
+            RenderingContext c, List<Box> blocks,
             Map collapsedTableBorders, BoxRangeLists rangeLists) {
         BoxRangeHelper helper = new BoxRangeHelper(c.getOutputDevice(), rangeLists.getBlock());
 
@@ -326,6 +336,9 @@ public class Layer {
 
         helper.popClipRegions(c, lines.size());
     }
+ 
+	
+	
 
     public void paint(RenderingContext c) {
         if (getMaster().getStyle().isFixed()) {
@@ -346,8 +359,8 @@ public class Layer {
         } else {
             BoxRangeLists rangeLists = new BoxRangeLists();
 
-            List blocks = new ArrayList();
-            List lines = new ArrayList();
+            List<Box> blocks = new ArrayList<Box>();
+            List<Box> lines = new ArrayList<Box>();
 
             BoxCollector collector = new BoxCollector();
             collector.collect(c, c.getOutputDevice().getClip(), this, blocks, lines, rangeLists);
@@ -395,7 +408,7 @@ public class Layer {
     	}
     }
 
-    private List getFloats() {
+    public List getFloats() {
         return _floats == null ? Collections.EMPTY_LIST : _floats;
     }
 
@@ -721,7 +734,7 @@ public class Layer {
         }
     }
 
-    private void positionFixedLayer(RenderingContext c) {
+    public void positionFixedLayer(RenderingContext c) {
         Rectangle rect = c.getFixedRectangle();
 
         Box fixed = getMaster();
@@ -749,7 +762,7 @@ public class Layer {
             result.height = test.height;
         }
     }
-
+    
     private void paintReplacedElement(RenderingContext c, BlockBox replaced) {
         Rectangle contentBounds = replaced.getContentAreaEdge(
                 replaced.getAbsX(), replaced.getAbsY(), c);

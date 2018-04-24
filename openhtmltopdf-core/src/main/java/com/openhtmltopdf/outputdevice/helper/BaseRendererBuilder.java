@@ -30,8 +30,10 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 	 */
 	public abstract static class BaseRendererBuilderState {
 		public final List<FSDOMMutator> _domMutators = new ArrayList<FSDOMMutator>();
-		public Map<String, HttpStreamFactory> _streamFactoryMap = new HashMap<String, HttpStreamFactory>();
+		public Map<String, FSStreamFactory> _streamFactoryMap = new HashMap<String, FSStreamFactory>();
 		public FSCache _cache;
+		public FSMultiThreadCache<String> _textCache;
+		public FSMultiThreadCache<byte[]> _byteCache;
 		public FSUriResolver _resolver;
 		public String _html;
 		public String _baseUri;
@@ -143,18 +145,18 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 	 * Provides an HttpStreamFactory implementation if the user desires to use an
 	 * external HTTP/HTTPS implementation. Uses URL::openStream by default.
 	 * 
-	 * @see {@link {@link #useProtocolsStreamImplementation(HttpStreamFactory, String[])}
+	 * @see {@link {@link #useProtocolsStreamImplementation(FSStreamFactory, String[])}
 	 *
 	 * @param factory
 	 * @return this for method chaining
 	 */
-	public final TFinalClass useHttpStreamImplementation(HttpStreamFactory factory) {
+	public final TFinalClass useHttpStreamImplementation(FSStreamFactory factory) {
 		this.useProtocolsStreamImplementation(factory, "http", "https");
 		return (TFinalClass) this;
 	}
 	
 	/**
-	 * Provides an {@link com.openhtmltopdf.extend.HttpStreamFactory}
+	 * Provides an {@link com.openhtmltopdf.extend.FSStreamFactory}
 	 * implementation if the user desires to use an external
 	 * stream provider for a particular set of protocols.
 	 * Protocols should always be in lower case.
@@ -162,13 +164,13 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 	 * NOTE: HttpStreamFactory, despite its historical name, can be used for any protocol
 	 * including private made-up protocols.
 	 * 
-	 * @see {@link #useHttpStreamImplementation(HttpStreamFactory)}
-	 * @see {@link #useProtocolsStreamImplementation(HttpStreamFactory, String[])}
+	 * @see {@link #useHttpStreamImplementation(FSStreamFactory)}
+	 * @see {@link #useProtocolsStreamImplementation(FSStreamFactory, String[])}
 	 * @param factory
 	 * @param protocols
 	 * @return this for method chaining
 	 */
-	public final TFinalClass useProtocolsStreamImplementation(HttpStreamFactory factory, Set<String> protocols) {
+	public final TFinalClass useProtocolsStreamImplementation(FSStreamFactory factory, Set<String> protocols) {
 		for (String protocol : protocols) {
 			state._streamFactoryMap.put(protocol, factory);
 		}
@@ -176,7 +178,7 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 	}
 
 	/**
-	 * Provides an {@link com.openhtmltopdf.extend.HttpStreamFactory}
+	 * Provides an {@link com.openhtmltopdf.extend.FSStreamFactory}
 	 * implementation if the user desires to use an external
 	 * stream provider for a particular list of protocols.
 	 * Protocols should always be in lower case.
@@ -184,13 +186,13 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 	 * NOTE: HttpStreamFactory, despite its historical name, can be used for any protocol
 	 * including private made-up protocols.
 	 * 
-	 * @see {@link #useHttpStreamImplementation(HttpStreamFactory)}
-	 * @see {@link #useProtocolsStreamImplementation(HttpStreamFactory, Set)}
+	 * @see {@link #useHttpStreamImplementation(FSStreamFactory)}
+	 * @see {@link #useProtocolsStreamImplementation(FSStreamFactory, Set)}
 	 * @param factory
 	 * @param protocols
 	 * @return this for method chaining
 	 */
-	public final TFinalClass useProtocolsStreamImplementation(HttpStreamFactory factory, String... protocols) {
+	public final TFinalClass useProtocolsStreamImplementation(FSStreamFactory factory, String... protocols) {
 		for (String protocol : protocols) {
 			state._streamFactoryMap.put(protocol, factory);
 		}
@@ -208,6 +210,37 @@ public abstract class BaseRendererBuilder<TFinalClass extends BaseRendererBuilde
 		return (TFinalClass) this;
 	}
 
+	/**
+	 * Provides a cache implementation that may be used accross threads.
+	 * Typically used with <code>useMultiThreadByteCache</code>
+	 * The String cache is used in preference of the byte cache for
+	 * resources that are needed as text, althrough the byte cache will
+	 * also be checked before loading the resource. In this case the byte array
+	 * will be interpreted as UTF-8.
+	 * 
+	 * @see {@link #useMultiThreadByteCache(FSMultiThreadCache)}
+	 * @see {@link com.openhtmltopdf.extend.FSMultiThreadCache}
+	 */
+    public final TFinalClass useMultiThreadStringCache(
+            FSMultiThreadCache<String> textCache) {
+    	state._textCache = textCache;
+    	return (TFinalClass) this;
+    }
+
+	/**
+	 * Provides a cache implementation that may be used accross threads.
+	 * Typically used with <code>useMultiThreadStringCache</code>
+	 * 
+	 * @see {@link #useMultiThreadStringCache(FSMultiThreadCache)}
+	 * @see {@link com.openhtmltopdf.extend.FSMultiThreadCache}
+	 */
+    public final TFinalClass useMultiThreadByteCache(
+            FSMultiThreadCache<byte[]> byteCache) {
+    	state._byteCache = byteCache;
+    	return (TFinalClass) this;
+    }
+
+    
 	/**
 	 * Provides an external cache which can choose to cache items between runs, such
 	 * as fonts or logo images.

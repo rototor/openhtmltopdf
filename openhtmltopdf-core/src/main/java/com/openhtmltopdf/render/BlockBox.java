@@ -26,6 +26,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.w3c.dom.Element;
+
 import com.openhtmltopdf.css.constants.CSSName;
 import com.openhtmltopdf.css.constants.IdentValue;
 import com.openhtmltopdf.css.newmatch.CascadedStyle;
@@ -51,6 +53,7 @@ import com.openhtmltopdf.layout.PaintingInfo;
 import com.openhtmltopdf.layout.PersistentBFC;
 import com.openhtmltopdf.layout.Styleable;
 import com.openhtmltopdf.newtable.TableRowBox;
+import com.openhtmltopdf.util.ThreadCtx;
 
 /**
  * A block box as defined in the CSS spec.  It also provides a base class for
@@ -104,9 +107,17 @@ public class BlockBox extends Box implements InlinePaintable {
     private int _childrenHeight;
 
     private boolean _fromCaptionedTable;
+    
+    private boolean _isReplaced;
 
     public BlockBox() {
         super();
+    }
+    
+    @Override
+    public void setElement(Element element) {
+    	super.setElement(element);
+    	_isReplaced = ThreadCtx.get().sharedContext().getReplacedElementFactory().isReplacedElement(element);
     }
 
     public BlockBox copyOf() {
@@ -231,13 +242,17 @@ public class BlockBox extends Box implements InlinePaintable {
 
         return result.toString();
     }
+    
+    public boolean isListItem() {
+    	return getStyle().isListItem();
+    }
 
     public void paintListMarker(RenderingContext c) {
         if (! getStyle().isVisible(c, this)) {
             return;
         }
 
-        if (getStyle().isListItem()) {
+        if (isListItem()) {
             ListItemPainter.paint(c, this);
         }
     }
@@ -402,6 +417,10 @@ public class BlockBox extends Box implements InlinePaintable {
         _staticEquivalent = staticEquivalent;
     }
 
+    public boolean shouldBeReplaced() {
+    	return _isReplaced;
+    }
+    
     public boolean isReplaced() {
         return _replacedElement != null;
     }
@@ -796,7 +815,6 @@ public class BlockBox extends Box implements InlinePaintable {
 
     public void layout(LayoutContext c, int contentStart) {
         CalculatedStyle style = getStyle();
-
         boolean pushedLayer = false;
         if (isRoot() || style.requiresLayer()) {
             pushedLayer = true;
@@ -1507,7 +1525,7 @@ public class BlockBox extends Box implements InlinePaintable {
             int width = getCSSWidth(c, true);
 
             if (width == -1) {
-                if (isReplaced()) {
+                if (getReplacedElement() != null) {
                     width = getReplacedElement().getIntrinsicWidth();
                 } else {
                     int height = getCSSHeight(c);

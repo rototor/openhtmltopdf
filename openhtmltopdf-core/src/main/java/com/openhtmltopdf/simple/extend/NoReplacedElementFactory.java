@@ -9,21 +9,14 @@ import com.openhtmltopdf.layout.LayoutContext;
 import com.openhtmltopdf.render.BlockBox;
 
 public class NoReplacedElementFactory implements ReplacedElementFactory {
-
+	@Override
     public ReplacedElement createReplacedElement(LayoutContext c, BlockBox box,
             UserAgentCallback uac, int cssWidth, int cssHeight) {
         return null;
     }
-
-    public void remove(Element e) {
-
-    }
-
-    public void setFormSubmissionListener(FormSubmissionListener listener) {
-        //TODO
-    }
-
-    public void reset() {
-    }
-
+	
+	@Override
+	public boolean isReplacedElement(Element e) {
+		return false;
+	}
 }
