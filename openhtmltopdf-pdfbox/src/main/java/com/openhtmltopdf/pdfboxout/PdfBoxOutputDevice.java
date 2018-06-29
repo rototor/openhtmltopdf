@@ -40,7 +40,6 @@ import com.openhtmltopdf.util.Configuration;
 import com.openhtmltopdf.util.XRLog;
 import de.rototor.pdfbox.graphics2d.PdfBoxGraphics2D;
 import de.rototor.pdfbox.graphics2d.PdfBoxGraphics2DFontTextDrawer;
-import org.apache.pdfbox.cos.COSInputStream;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -214,7 +213,6 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     private PdfBoxLinkManager _linkManager;
     
     // Not used currently.
-    @SuppressWarnings("unused")
     private RenderingContext _renderingContext;
     
     // The bidi reorderer is responsible for shaping Arabic text, deshaping and 
@@ -223,7 +221,7 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
 
     // Font Mapping for the Graphics2D output
     private PdfBoxGraphics2DFontTextDrawer _fontTextDrawer;
-
+    
     public PdfBoxOutputDevice(float dotsPerPoint, boolean testMode) {
         _dotsPerPoint = dotsPerPoint;
         _testMode = testMode;
@@ -246,9 +244,11 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         _page = page;
         _pageHeight = height;
 
-        // We call saveGraphics so we can get back to a raw (unclipped) state after we have clipped.
-        // restoreGraphics is only used by setClip and page finish.
-        _cp.saveGraphics();
+        if (!isFastRenderer()) {
+            // We call saveGraphics so we can get back to a raw (unclipped) state after we have clipped.
+            // restoreGraphics is only used by setClip and page finish (unless the fast renderer is in use).
+            _cp.saveGraphics();
+        }
         
         _transform = new AffineTransform();
         _transform.scale(1.0d / _dotsPerPoint, 1.0d / _dotsPerPoint);
@@ -270,7 +270,10 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     }
 
     public void finishPage() {
-        _cp.restoreGraphics();
+        if (!isFastRenderer()) {
+            _cp.restoreGraphics();
+        }
+        
         _cp.closeContent();
     }
 
@@ -870,6 +873,11 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
     }
 
     public void clip(Shape s) {
+        if (isFastRenderer()) {
+            XRLog.render(Level.SEVERE, "clip MUST not be used by the fast renderer. Please consider reporting this bug.");
+            return;
+        }
+        
         if (s != null) {
             s = _transform.createTransformedShape(s);
             if (_clip == null)
@@ -880,17 +888,44 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         } else {
             assert(s != null);
         }
+        //throw new RuntimeException(s.toString());
     }
 
     public Shape getClip() {
+        if (isFastRenderer()) {
+            XRLog.render(Level.SEVERE, "getClip MUST not be used by the fast renderer. Please consider reporting this bug.");
+            return null;
+        }
+        
         try {
             return _transform.createInverse().createTransformedShape(_clip);
         } catch (NoninvertibleTransformException e) {
             return null;
         }
     }
+    
+    @Override
+    public void popClip() {
+        _cp.restoreGraphics();
+        clearPageState();
+    }
+    
+    @Override
+    public void pushClip(Shape s) {
+        _cp.saveGraphics();
+        if (s != null) {
+            Shape s1 = _transform.createTransformedShape(s);
+            followPath(s1, CLIP);
+        }
+    }
 
+    @Override
     public void setClip(Shape s) {
+        if (isFastRenderer()) {
+            XRLog.render(Level.SEVERE, "setClip MUST not be used by the fast renderer. Please consider reporting this bug.");
+            return;
+        }
+
         // Restore graphics to get back to a no-clip situation.
         _cp.restoreGraphics();
 
@@ -912,10 +947,8 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
             _clip = new Area(s);
             followPath(s, CLIP);
         }
-
-        _fillColor = null;
-        _strokeColor = null;
-        _oldStroke = null;
+        
+        clearPageState();
     }
 
     public Stroke getStroke() {
@@ -1200,7 +1233,7 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
      * @return an ArrayList with matching content values; otherwise an empty
      *         list.
      */
-    public List getMetadataListByName(String name) {
+    public List<String> getMetadataListByName(String name) {
         List<String> result = new ArrayList<String>();
         if (name != null) {
             for (Metadata m : _metadata) {
@@ -1445,15 +1478,14 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         }
     }
 
-    public List findPagePositionsByID(CssContext c, Pattern pattern) {
-        Map idMap = _sharedContext.getIdMap();
+    public List<PagePosition> findPagePositionsByID(CssContext c, Pattern pattern) {
+        Map<String, Box> idMap = _sharedContext.getIdMap();
         if (idMap == null) {
-            return Collections.EMPTY_LIST;
+            return Collections.emptyList();
         }
 
         List<PagePosition> result = new ArrayList<PagePosition>();
-        for (Object o : idMap.entrySet()) {
-            Entry entry = (Entry) o;
+        for (Entry<String, Box> entry : idMap.entrySet()) {
             String id = (String) entry.getKey();
             if (pattern.matcher(id).find()) {
                 Box box = (Box) entry.getValue();
@@ -1584,5 +1616,37 @@ public class PdfBoxOutputDevice extends AbstractOutputDevice implements OutputDe
         if (_fontTextDrawer != null) {
             _fontTextDrawer.close();
         }
+    }
+    
+    private AffineTransform normalizeTransform(AffineTransform transform) {
+        double[] mx = new double[6];
+        transform.getMatrix(mx);
+        mx[4] /= _dotsPerPoint;
+        mx[5] /= _dotsPerPoint;
+        return new AffineTransform(mx);
+    }
+
+    @Override
+    public void pushTransformLayer(AffineTransform transform) {
+        _cp.saveGraphics();
+        AffineTransform normalized = normalizeTransform(transform);
+        _cp.applyPdfMatrix(normalized);
+    }
+
+    @Override
+    public void popTransformLayer() {
+        _cp.restoreGraphics();
+        clearPageState();
+    }
+    
+    @Override
+    public boolean isFastRenderer() {
+        return _renderingContext.isFastRenderer();
+    }
+    
+    private void clearPageState() {
+        _fillColor = null;
+        _strokeColor = null;
+        _oldStroke = null;
     }
 }
